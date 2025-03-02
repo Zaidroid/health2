@@ -3,10 +3,13 @@ import { Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { ThemeToggle } from '../components/ThemeToggle';
+import { useTheme } from '../context/ThemeContext'; // Import useTheme
 
 export function Login() {
   const { signIn, user, loading, guest } = useAuth();
   const navigate = useNavigate();
+  const { resolvedTheme } = useTheme(); // Use resolvedTheme
 
   useEffect(() => {
     if (user || guest) {
@@ -16,7 +19,7 @@ export function Login() {
 
   const handleGoogleSignIn = async () => {
     try {
-      await signIn('google'); // Use the provider argument
+      await signIn('google');
     } catch (error) {
       console.error('Error signing in:', error);
     }
@@ -25,13 +28,8 @@ export function Login() {
   if (loading) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <motion.div
-        className="sm:mx-auto sm:w-full sm:max-w-md"
-        initial={{ opacity: 0, y: -50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+    <div className={`min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 ${resolvedTheme === 'dark' ? 'bg-dark-background' : 'bg-gray-50'}`}>
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <motion.div
             animate={{
@@ -44,7 +42,7 @@ export function Login() {
               repeatType: "reverse"
             }}
           >
-            <Activity className="h-16 w-16 text-indigo-600" />
+            <Activity className={`h-16 w-16 ${resolvedTheme === 'dark' ? 'text-dark-primary' : 'text-indigo-600'}`} />
           </motion.div>
         </div>
         <motion.h2
@@ -56,14 +54,17 @@ export function Login() {
           Welcome to Zaid Health
         </motion.h2>
         <motion.p
-          className="mt-2 text-center text-lg text-gray-600"
+          className={`mt-2 text-center text-lg ${resolvedTheme === 'dark' ? 'text-dark-text' : 'text-gray-600'}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5, duration: 0.5 }}
         >
           Your personal fitness journey starts here
         </motion.p>
-      </motion.div>
+      </div>
+      <div className='absolute top-4 right-4'>
+          <ThemeToggle />
+        </div>
 
       <motion.div
         className="mt-8 sm:mx-auto sm:w-full sm:max-w-md"
@@ -71,15 +72,15 @@ export function Login() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7, duration: 0.5 }}
       >
-        <div className="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10 border border-indigo-100">
+        <div className={`${resolvedTheme === 'dark' ? 'bg-dark-card border border-gray-700' : 'bg-white border border-indigo-100'} py-8 px-4 shadow-lg sm:rounded-lg sm:px-10`}>
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-medium text-gray-900 text-center mb-4">Sign in to your account</h3>
+              <h3 className={`text-lg font-medium text-center mb-4 ${resolvedTheme === 'dark' ? 'text-dark-foreground' : 'text-gray-900'}`}>Sign in to your account</h3>
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={handleGoogleSignIn}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
+                className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-md text-sm font-medium ${resolvedTheme === 'dark' ? 'text-white bg-indigo-600 hover:bg-indigo-700' : 'text-white bg-indigo-600 hover:bg-indigo-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200`}
               >
                 <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                   <path
@@ -107,10 +108,10 @@ export function Login() {
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
+                  <div className={`w-full ${resolvedTheme === 'dark' ? 'border-gray-700' : 'border-gray-300'} border-t`}></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">Or continue as guest</span>
+                  <span className={`px-2 ${resolvedTheme === 'dark' ? 'bg-dark-card text-gray-400' : 'bg-white text-gray-500'}`}>Or continue as guest</span>
                 </div>
               </div>
 
@@ -118,9 +119,9 @@ export function Login() {
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
-                  className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
+                  className={`w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 ${resolvedTheme === 'dark' ? 'border-gray-700 text-gray-200 bg-dark-card hover:bg-gray-700' : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}`}
                   onClick={() => {
-                    signIn(); // Call signIn without arguments for guest
+                    signIn();
                     navigate('/');
                   }}
                 >

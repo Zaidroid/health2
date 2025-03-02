@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Activity, Calendar as CalendarIcon, LogOut, Menu, X, Home, User } from 'lucide-react';
+import { Activity, Calendar as CalendarIcon, LogOut, Menu, X, Home, User, TrendingUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
@@ -29,6 +29,7 @@ export function Layout() {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: <Home className="h-5 w-5" /> },
     { path: '/calendar', label: 'Calendar', icon: <CalendarIcon className="h-5 w-5" /> },
+    { path: '/workoutprogress', label: 'Workout Progress', icon: <TrendingUp className="h-5 w-5" /> },
   ];
 
   return (
@@ -60,8 +61,8 @@ export function Layout() {
                     to={item.path}
                     className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                       location.pathname === item.path
-                        ? 'text-indigo-600 dark:text-dark-primary bg-indigo-50 dark:bg-dark-card'
-                        : 'text-gray-500 dark:text-dark-text hover:text-indigo-600 dark:hover:text-dark-primary hover:bg-indigo-50 dark:hover:bg-dark-card'
+                        ? 'text-indigo-600 dark:text-white bg-indigo-50 dark:bg-indigo-600'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-white hover:bg-indigo-50 dark:hover:bg-indigo-500'
                     }`}
                   >
                     <motion.div
@@ -128,8 +129,8 @@ export function Layout() {
                     to={item.path}
                     className={`block px-3 py-2 rounded-md text-base font-medium ${
                       location.pathname === item.path
-                        ? 'text-indigo-600 dark:text-dark-primary bg-indigo-50 dark:bg-dark-card'
-                        : 'text-gray-500 dark:text-dark-text hover:text-indigo-600 dark:hover:text-dark-primary hover:bg-indigo-50 dark:hover:bg-dark-card'
+                        ? 'text-indigo-600 dark:text-white bg-indigo-50 dark:bg-indigo-600'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-white hover:bg-indigo-50 dark:hover:bg-indigo-500'
                     }`}
                     onClick={() => setMobileMenuOpen(false)}
                   >

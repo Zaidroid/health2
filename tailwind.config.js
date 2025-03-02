@@ -3,6 +3,8 @@ module.exports = {
   darkMode: 'class',
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
+    "./global.css", // Ensure global.css is included in the content array
+    "./index.html",
   ],
   theme: {
     extend: {
@@ -26,7 +28,7 @@ module.exports = {
           card: 'rgb(20, 20, 35)',
           foreground: 'rgb(250, 250, 255)',
           text: 'rgb(200, 200, 220)',
-          primary: 'var(--color-primary-500)', 
+          primary: 'var(--color-primary-500)',
           muted: 'rgb(40, 40, 60)'
         }
       },
