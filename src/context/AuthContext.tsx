@@ -84,14 +84,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setGuest(false);
       } else {
         // Anonymous sign-in for guest
+        console.log("Attempting anonymous sign-in..."); // Added logging
         const { data, error } = await supabase.auth.signInAnonymously();
 
         if (error) {
-          console.error("Guest sign-in error:", error);
+          console.error("Guest sign-in error:", error); // Added logging
           throw error;
         }
 
         if (data && data.user) {
+          console.log("Guest sign-in successful:", data.user); // Added logging
           setUser({
             id: data.user.id,
             email: 'guest@example.com', // Use a consistent guest email
@@ -101,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
           setGuest(true);
         } else {
-          console.warn("Guest sign-in: No user data returned");
+          console.warn("Guest sign-in: No user data returned"); // Added logging
           setLoading(false);
         }
       }

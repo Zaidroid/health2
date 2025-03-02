@@ -12,6 +12,7 @@ export function Login() {
   const { resolvedTheme } = useTheme(); // Use resolvedTheme
 
   useEffect(() => {
+    console.log("Login useEffect: user=", user, "guest=", guest); // Added logging
     if (user || guest) {
       navigate('/');
     }
