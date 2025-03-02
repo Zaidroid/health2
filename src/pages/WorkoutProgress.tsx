@@ -1,194 +1,136 @@
-import React, { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Dumbbell, ClipboardList, Award, TrendingUp, Calendar, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AnimatedCard } from '../components/AnimatedComponents';
+import { useWorkout } from '../context/WorkoutContext';
+import { useAuth } from '../context/AuthContext';
 
 type ExerciseProgress = {
   week: number;
-  pushups: number;
-  pullups: number;
-  dips: number;
-  plank: number;
-  handstand: number;
+  [exerciseName: string]: number | boolean | string; // More flexible type
   skillPractice: boolean;
   notes: string;
 };
 
 export function WorkoutProgress() {
-  const [currentWeek, setCurrentWeek] = useState(1);
-  const [progressData, setProgressData] = useState<ExerciseProgress[]>([
-    { 
-      week: 1, 
-      pushups: 12, 
-      pullups: 3, 
-      dips: 8, 
-      plank: 25, 
-      handstand: 15, 
-      skillPractice: true,
-      notes: "Form feels good, struggled with handstands"
-    },
-    { 
-      week: 2, 
-      pushups: 14, 
-      pullups: 4, 
-      dips: 10, 
-      plank: 30, 
-      handstand: 20, 
-      skillPractice: true,
-      notes: "Increased all reps, getting better at handstands"
-    },
-    { 
-      week: 3, 
-      pushups: 16, 
-      pullups: 5, 
-      dips: 11, 
-      plank: 35, 
-      handstand: 25, 
-      skillPractice: false,
-      notes: "Missed skill practice day, but strength improving"
-    },
-  ]);
+  const { currentWeek, setCurrentWeek, progressData, trainingSchedules, progressionPlans } = useWorkout();
+  const { user } = useAuth();
+  const selectedPlan = user?.selectedPlan || "Z Axis";
 
-  const trainingSchedule = [
-    {
-      day: "Monday",
-      focus: "Upper Body (Push Focus)",
-      exercises: [
-        { name: "Push-ups", sets: 3, reps: "10-15" },
-        { name: "Dips", sets: 3, reps: "8-12" },
-        { name: "Resistance band shoulder press", sets: 3, reps: "12" }
-      ]
-    },
-    {
-      day: "Tuesday",
-      focus: "Lower Body (Knee-Friendly)",
-      exercises: [
-        { name: "Glute bridges", sets: 3, reps: "15" },
-        { name: "Bodyweight squats", sets: 3, reps: "12" },
-        { name: "Resistance band leg curls", sets: 3, reps: "15" }
-      ]
-    },
-    {
-      day: "Wednesday",
-      focus: "Rest or Active Recovery",
-      exercises: []
-    },
-    {
-      day: "Thursday",
-      focus: "Upper Body (Pull Focus)",
-      exercises: [
-        { name: "Pull-ups", sets: 3, reps: "3-5" },
-        { name: "Inverted rows", sets: 3, reps: "8-10" },
-        { name: "Resistance band bicep curls", sets: 3, reps: "12" }
-      ]
-    },
-    {
-      day: "Friday",
-      focus: "Skill & Core Training",
-      exercises: [
-        { name: "Handstand wall walks", sets: 3, reps: "5" },
-        { name: "Wall-supported handstand hold", sets: 3, reps: "15-30 sec" },
-        { name: "Standard plank", sets: 3, reps: "20-30 sec" },
-        { name: "Side planks", sets: 3, reps: "15-20 sec per side" }
-      ]
-    },
-    {
-      day: "Saturday",
-      focus: "Full Body Workout",
-      exercises: [
-        { name: "Burpees", sets: 3, reps: "10" },
-        { name: "Mountain climbers", sets: 3, reps: "20" },
-        { name: "Resistance band rows", sets: 3, reps: "12" }
-      ]
-    },
-    {
-      day: "Sunday",
-      focus: "Rest",
-      exercises: []
-    }
-  ];
+  const [localProgressData, setLocalProgressData] = useState<ExerciseProgress[]>([]);
 
-  const progressionPlan = [
-    {
-      weeks: "Week 1-2",
-      focus: "Focus on mastering form and endurance.",
-      targets: [
-        "Push-ups: 3x10-15",
-        "Pull-ups: 3x3-5",
-        "Planks: 3x20-30 sec"
-      ]
-    },
-    {
-      weeks: "Week 3-4",
-      focus: "Increase reps and intensity.",
-      targets: [
-        "Push-ups: 3x15-20",
-        "Pull-ups: 3x4-6",
-        "Planks: 3x30-45 sec"
-      ]
-    },
-    {
-      weeks: "Week 5-6",
-      focus: "Push towards strength improvements.",
-      targets: [
-        "Push-ups: 3x20+",
-        "Pull-ups: 3x5-7",
-        "Planks: 3x45-60 sec"
-      ]
+  // Initialize localProgressData based on the selected plan
+  useEffect(() => {
+    if (trainingSchedules && trainingSchedules[selectedPlan]) {
+      const initialData: ExerciseProgress[] = [];
+      for (let week = 1; week <= Object.keys(trainingSchedules[selectedPlan]).length; week++) {
+        const weekData: ExerciseProgress = {
+          week: week,
+          skillPractice: false,
+          notes: "",
+        };
+
+        // Add exercise keys dynamically based on the training schedule for the week
+        const weekSchedule = trainingSchedules[selectedPlan][week];
+        if (weekSchedule) {
+          weekSchedule.forEach(day => {
+            day.exercises.forEach(exercise => {
+              const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
+              weekData[exerciseKey] = 0; // Initialize to 0 or appropriate default
+            });
+          });
+        }
+
+        initialData.push(weekData);
+      }
+      setLocalProgressData(initialData);
     }
-  ];
+  }, [trainingSchedules, selectedPlan]);
+
+  // Sync global progressData with localProgressData
+  useEffect(() => {
+    if (progressData.length > 0) {
+      setLocalProgressData(prevData => {
+        const newData = [...prevData];
+        progressData.forEach(entry => {
+          const index = newData.findIndex(localEntry => localEntry.week === entry.week);
+          if (index > -1) {
+            // Merge global data into local data, handling dynamic exercise keys
+            const updatedEntry = { ...newData[index], ...entry };
+            newData[index] = updatedEntry;
+          }
+        });
+        return newData;
+      });
+    }
+  }, [progressData]);
 
   const addProgressEntry = () => {
-    const lastWeek = progressData.length > 0 ? progressData[progressData.length - 1].week : 0;
+    const lastWeek = localProgressData.length > 0 ? localProgressData[localProgressData.length - 1].week : 0;
+    const newWeek = lastWeek + 1;
+
     const newProgressEntry: ExerciseProgress = {
-      week: lastWeek + 1,
-      pushups: 0,
-      pullups: 0,
-      dips: 0,
-      plank: 0,
-      handstand: 0,
+      week: newWeek,
       skillPractice: false,
-      notes: ""
+      notes: "",
     };
-    setProgressData([...progressData, newProgressEntry]);
-    setCurrentWeek(lastWeek + 1);
+
+    // Dynamically add exercise keys based on the new week's training schedule
+    const weekSchedule = trainingSchedules[selectedPlan]?.[newWeek];
+    if (weekSchedule) {
+      weekSchedule.forEach(day => {
+        day.exercises.forEach(exercise => {
+          const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
+          newProgressEntry[exerciseKey] = 0;
+        });
+      });
+    }
+
+    setLocalProgressData([...localProgressData, newProgressEntry]);
+    setCurrentWeek(newWeek);
   };
 
-  const updateProgressEntry = (field: keyof ExerciseProgress, value: any) => {
-    const updatedData = progressData.map(entry => {
+  const updateProgressEntry = (field: string, value: any) => { // field is now a string
+    const updatedData = localProgressData.map(entry => {
       if (entry.week === currentWeek) {
         return { ...entry, [field]: value };
       }
       return entry;
     });
-    setProgressData(updatedData);
+    setLocalProgressData(updatedData);
   };
 
   const handleWeekChange = (direction: 'prev' | 'next') => {
     if (direction === 'prev' && currentWeek > 1) {
       setCurrentWeek(currentWeek - 1);
-    } else if (direction === 'next' && currentWeek < 6) {
-      // Check if we need to add a new entry
-      if (currentWeek >= progressData.length) {
-        addProgressEntry();
-      } else {
-        setCurrentWeek(currentWeek + 1);
+    } else if (direction === 'next') {
+      const numWeeksInPlan = Object.keys(trainingSchedules[selectedPlan] || {}).length;
+      if (currentWeek < numWeeksInPlan) {
+        // Check if we need to add a new entry
+        if (currentWeek >= localProgressData.length) {
+          addProgressEntry();
+        } else {
+          setCurrentWeek(currentWeek + 1);
+        }
       }
     }
   };
 
   // Find current week data
-  const currentWeekData = progressData.find(entry => entry.week === currentWeek) || {
+  const currentWeekData = localProgressData.find(entry => entry.week === currentWeek) || {
     week: currentWeek,
-    pushups: 0,
-    pullups: 0,
-    dips: 0,
-    plank: 0,
-    handstand: 0,
     skillPractice: false,
-    notes: ""
+    notes: "",
+    ...Object.fromEntries( // Initialize with 0 for all exercises in the current week's plan
+      trainingSchedules[selectedPlan]?.[currentWeek]?.flatMap(day =>
+        day.exercises.map(exercise => [exercise.name.toLowerCase().replace(/[- ]/g, ''), 0])
+      ) || []
+    )
   };
+
+  const trainingSchedule = trainingSchedules[selectedPlan] ? trainingSchedules[selectedPlan][currentWeek] : [];
+  const progressionPlan = progressionPlans[selectedPlan] || {};
 
   // Animation variants
   const container = {
@@ -206,6 +148,30 @@ export function WorkoutProgress() {
     show: { opacity: 1, y: 0 }
   };
 
+    // Prepare chart data, only including exercises that exist in the current plan
+  const generateChartData = () => {
+    return localProgressData.map(entry => {
+      const chartEntry: any = { week: `Week ${entry.week}` };
+      Object.keys(entry).forEach(key => {
+        if (key !== 'week' && key !== 'skillPractice' && key !== 'notes' && typeof entry[key] === 'number') {
+          // Only include if the exercise exists in *any* week of the selected plan
+          const exerciseExistsInPlan = Object.values(trainingSchedules[selectedPlan] || {}).some(week =>
+            week.some(day =>
+              day.exercises.some(ex => ex.name.toLowerCase().replace(/[- ]/g, '') === key)
+            )
+          );
+
+          if (exerciseExistsInPlan) {
+            chartEntry[key] = entry[key];
+          }
+        }
+      });
+      return chartEntry;
+    });
+  };
+
+  const chartData = generateChartData();
+
   return (
     <motion.div
       className="space-y-8"
@@ -220,12 +186,12 @@ export function WorkoutProgress() {
       >
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">6-Week Calisthenics Program</h2>
-            <motion.div 
+            <h2 className="text-xl font-semibold text-white">6-Week {selectedPlan} Program</h2>
+            <motion.div
               className="flex items-center space-x-2"
               whileHover={{ scale: 1.02 }}
             >
-              <span className="text-white font-medium">Week {currentWeek} of 6</span>
+              <span className="text-white font-medium">Week {currentWeek} of {Object.keys(trainingSchedules[selectedPlan] || {}).length}</span>
               <div className="flex space-x-1">
                 <motion.button
                   whileHover={{ scale: 1.1 }}
@@ -240,8 +206,8 @@ export function WorkoutProgress() {
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => handleWeekChange('next')}
-                  disabled={currentWeek === 6}
-                  className={`p-1 rounded-full bg-white/20 ${currentWeek === 6 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/30'}`}
+                  disabled={currentWeek === Object.keys(trainingSchedules[selectedPlan] || {}).length}
+                  className={`p-1 rounded-full bg-white/20 ${currentWeek === Object.keys(trainingSchedules[selectedPlan] || {}).length ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/30'}`}
                 >
                   <ChevronRight className="h-5 w-5 text-white" />
                 </motion.button>
@@ -262,94 +228,34 @@ export function WorkoutProgress() {
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <motion.div
-                  className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
-                  whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
-                >
-                  <div className="flex items-center mb-2">
-                    <Dumbbell className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-                    <h3 className="font-medium text-gray-700 dark:text-gray-300">Push-ups</h3>
-                  </div>
-                  <input
-                    type="number"
-                    value={currentWeekData.pushups || ''}
-                    onChange={(e) => updateProgressEntry('pushups', parseInt(e.target.value))}
-                    className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
-                    placeholder="Max reps"
-                  />
-                </motion.div>
 
-                <motion.div
-                  className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
-                  whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
-                >
-                  <div className="flex items-center mb-2">
-                    <Dumbbell className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-                    <h3 className="font-medium text-gray-700 dark:text-gray-300">Pull-ups</h3>
-                  </div>
-                  <input
-                    type="number"
-                    value={currentWeekData.pullups || ''}
-                    onChange={(e) => updateProgressEntry('pullups', parseInt(e.target.value))}
-                    className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
-                    placeholder="Max reps"
-                  />
-                </motion.div>
-
-                <motion.div
-                  className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
-                  whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
-                >
-                  <div className="flex items-center mb-2">
-                    <Dumbbell className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-                    <h3 className="font-medium text-gray-700 dark:text-gray-300">Dips</h3>
-                  </div>
-                  <input
-                    type="number"
-                    value={currentWeekData.dips || ''}
-                    onChange={(e) => updateProgressEntry('dips', parseInt(e.target.value))}
-                    className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
-                    placeholder="Max reps"
-                  />
-                </motion.div>
-
-                <motion.div
-                  className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
-                  whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
-                >
-                  <div className="flex items-center mb-2">
-                    <Dumbbell className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-                    <h3 className="font-medium text-gray-700 dark:text-gray-300">Plank (sec)</h3>
-                  </div>
-                  <input
-                    type="number"
-                    value={currentWeekData.plank || ''}
-                    onChange={(e) => updateProgressEntry('plank', parseInt(e.target.value))}
-                    className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
-                    placeholder="Seconds"
-                  />
-                </motion.div>
-              </div>
+              {/* Dynamically generate input fields based on the current week's exercises */}
+              {trainingSchedule && trainingSchedule.map((day) =>
+                day.exercises.map((exercise, index) => {
+                  const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
+                  return (
+                    <motion.div
+                      key={`${currentWeek}-${exerciseKey}`} // Unique key
+                      className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
+                      whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
+                    >
+                      <div className="flex items-center mb-2">
+                        <Dumbbell className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
+                        <h3 className="font-medium text-gray-700 dark:text-gray-300">{exercise.name}</h3>
+                      </div>
+                      <input
+                        type="number"
+                        value={currentWeekData[exerciseKey] || ''}
+                        onChange={(e) => updateProgressEntry(exerciseKey, parseInt(e.target.value))}
+                        className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
+                        placeholder={exercise.type === 'reps' ? "Max reps" : "Seconds"}
+                      />
+                    </motion.div>
+                  );
+                })
+              )}
 
               <motion.div
-                className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
-                whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
-              >
-                <div className="flex items-center mb-2">
-                  <Dumbbell className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-                  <h3 className="font-medium text-gray-700 dark:text-gray-300">Handstand Hold (sec)</h3>
-                </div>
-                <input
-                  type="number"
-                  value={currentWeekData.handstand || ''}
-                  onChange={(e) => updateProgressEntry('handstand', parseInt(e.target.value))}
-                  className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
-                  placeholder="Seconds"
-                />
-              </motion.div>
-
-              <motion.div 
                 className="flex items-center bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
                 whileHover={{ y: -3 }}
               >
@@ -390,19 +296,18 @@ export function WorkoutProgress() {
                   Weekly Target (Week {currentWeek})
                 </h3>
                 <div className="bg-indigo-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
-                  {progressionPlan.map((plan, index) => {
-                    const weekRange = plan.weeks.replace("Week ", "").split("-").map(Number);
-                    const isCurrentPlan = (currentWeek >= weekRange[0] && currentWeek <= weekRange[1]);
-                    
+                  {Object.entries(progressionPlan).map(([weekRange, targets], index) => {
+                    const weekNumbers = weekRange.split("-").map(Number);
+                    const isCurrentPlan = currentWeek >= weekNumbers[0] && currentWeek <= (weekNumbers[1] || weekNumbers[0]);
+
                     return isCurrentPlan && (
                       <div key={index} className="space-y-2">
-                        <h4 className="font-medium text-indigo-700 dark:text-indigo-300">{plan.weeks}</h4>
-                        <p className="text-gray-600 dark:text-gray-300 text-sm">{plan.focus}</p>
+                        <h4 className="font-medium text-indigo-700 dark:text-indigo-300">Week {weekRange}</h4>
                         <ul className="space-y-1 mt-2">
-                          {plan.targets.map((target, idx) => (
+                          {Object.entries(targets).map(([exercise, target], idx) => (
                             <li key={idx} className="flex items-start">
                               <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2" />
-                              <span className="text-sm text-gray-700 dark:text-gray-300">{target}</span>
+                              <span className="text-sm text-gray-700 dark:text-gray-300">{exercise}: {target}</span>
                             </li>
                           ))}
                         </ul>
@@ -410,14 +315,14 @@ export function WorkoutProgress() {
                     );
                   })}
                 </div>
-                
+
                 <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4 flex items-center">
                   <Award className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" />
                   Your Progress Chart
                 </h3>
                 <div className="w-full h-60">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={progressData}>
+                    <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis dataKey="week" stroke="#6366F1" label={{ value: 'Week', position: 'insideBottom', offset: -5 }} />
                       <YAxis stroke="#6366F1" />
@@ -430,37 +335,39 @@ export function WorkoutProgress() {
                         }}
                       />
                       <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="pushups"
-                        stroke="#6366F1"
-                        strokeWidth={2}
-                        name="Push-ups"
-                        dot={{ stroke: '#6366F1', strokeWidth: 2, r: 4, fill: 'white' }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="pullups"
-                        stroke="#8B5CF6"
-                        strokeWidth={2}
-                        name="Pull-ups"
-                        dot={{ stroke: '#8B5CF6', strokeWidth: 2, r: 4, fill: 'white' }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="plank"
-                        stroke="#EC4899"
-                        strokeWidth={2}
-                        name="Plank (sec)"
-                        dot={{ stroke: '#EC4899', strokeWidth: 2, r: 4, fill: 'white' }}
-                      />
+                      {/* Dynamically render lines based on chartData */}
+                      {chartData.length > 0 && Object.keys(chartData[0])
+                        .filter(key => key !== 'week')
+                        .map((key, index) => {
+                          const colors = [
+                            '#6366F1', // indigo
+                            '#8B5CF6', // violet
+                            '#EC4899', // pink
+                            '#10B981', // emerald
+                            '#F59E0B', // amber
+                            '#06B6D4', // cyan
+                            '#F97316', // orange
+                          ];
+                          const color = colors[index % colors.length];
+                          return (
+                            <Line
+                              key={key}
+                              type="monotone"
+                              dataKey={key}
+                              stroke={color}
+                              strokeWidth={2}
+                              name={key.charAt(0).toUpperCase() + key.slice(1)}
+                              dot={{ stroke: color, strokeWidth: 2, r: 4, fill: 'white' }}
+                            />
+                          );
+                        })}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </AnimatedCard>
             </div>
           </div>
-          
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -481,7 +388,7 @@ export function WorkoutProgress() {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {trainingSchedule.map((day, index) => (
+            {trainingSchedule && trainingSchedule.map((day, index) => (
               <motion.div
                 key={index}
                 className="border border-indigo-100 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800 shadow-sm"
@@ -493,16 +400,16 @@ export function WorkoutProgress() {
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200">{day.day}</h3>
                   <span className="text-sm text-indigo-600 dark:text-indigo-400 font-medium px-3 py-1 bg-indigo-50 dark:bg-gray-700 rounded-full">
-                    {day.focus}
+                    {/* You might want a 'focus' property in your daily workout object */}
                   </span>
                 </div>
-                
+
                 {day.exercises.length > 0 ? (
                   <ul className="space-y-2 mt-3">
                     {day.exercises.map((exercise, idx) => (
                       <li key={idx} className="text-gray-700 dark:text-gray-300 text-sm flex items-center">
                         <Dumbbell className="h-4 w-4 text-indigo-500 mr-2" />
-                        <span>{exercise.name}: {exercise.sets} sets × {exercise.reps}</span>
+                        <span>{exercise.name}: {exercise.sets} sets × {exercise.targetReps}</span>
                       </li>
                     ))}
                   </ul>
@@ -543,7 +450,7 @@ export function WorkoutProgress() {
                 <span className="font-medium mr-2">Post-Workout:</span> Protein shake (if available) or milk with honey
               </li>
             </ul>
-            
+
             <div className="mt-4 pt-4 border-t border-indigo-100 dark:border-gray-700">
               <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-1">Creatine Usage:</h4>
               <p className="text-gray-700 dark:text-gray-300">Take 3-5g daily with plenty of water.</p>

@@ -4,6 +4,7 @@ export interface User {
   name: string;
   googleToken: string;
   trainingStartDate: Date;
+  selectedPlan: string; // Add selectedPlan to User interface
 }
 
 export interface WorkoutPlan {

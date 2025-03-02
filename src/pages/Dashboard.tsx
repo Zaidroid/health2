@@ -28,6 +28,7 @@ import { motion } from 'framer-motion';
 
 export function Dashboard() {
   const { user } = useAuth();
+  const selectedPlan = user?.selectedPlan || "Z Axis"; // Get selected plan
   const {
     progressData,
     currentWeek,
@@ -36,8 +37,8 @@ export function Dashboard() {
     trainingSchedule
   } = useWorkout();
 
-  // Get today's planned workout using the context function
-  const todaysWorkout = getPlannedWorkout();
+  // Get today's planned workout using the context function, passing the selected plan
+  const todaysWorkout = getPlannedWorkout(selectedPlan);
 
   // Get the current day name
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
@@ -98,15 +99,22 @@ export function Dashboard() {
     }
   }, [todaysWorkout]);
 
-  // Convert progress data to chart format
+  // Convert progress data to chart format, filtering by exercises in the selected plan
   const generateProgressChartData = () => {
     return progressData.map(entry => {
       const chartEntry: any = { week: `Week ${entry.week}` };
 
-      // Add all exercise properties from the entry
+      // Add all exercise properties from the entry *that are part of the current plan*
       Object.keys(entry).forEach(key => {
         if (key !== 'week' && key !== 'skillPractice' && key !== 'notes' && typeof entry[key] === 'number') {
-          chartEntry[key] = entry[key];
+          // Check if this exercise key exists in the current week's training schedule for the selected plan
+          const exerciseExistsInPlan = trainingSchedule[selectedPlan]?.[entry.week]?.some(day =>
+            day.exercises.some(ex => ex.name.toLowerCase().replace(/[- ]/g, '') === key)
+          );
+
+          if (exerciseExistsInPlan) {
+            chartEntry[key] = entry[key];
+          }
         }
       });
 

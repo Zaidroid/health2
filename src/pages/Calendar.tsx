@@ -3,6 +3,8 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMon
 import { ChevronLeft, ChevronRight, Dumbbell, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkout } from '../context/WorkoutContext'; // Import useWorkout
+import { useAuth } from '../context/AuthContext'; // Import useAuth
+
 
 interface WorkoutData {
   [date: string]: {
@@ -26,7 +28,10 @@ export function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [direction, setDirection] = useState(0);
-  const { trainingSchedule, currentWeek, progressData } = useWorkout(); // Use the WorkoutContext
+  const { trainingSchedules, currentWeek, progressData } = useWorkout(); // Use the WorkoutContext
+  const { user } = useAuth(); // Get user from AuthContext
+  const selectedPlan = user?.selectedPlan || "Z Axis";  // Get selected plan, default to "Z Axis"
+
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -47,9 +52,17 @@ export function Calendar() {
   // Get workout from trainingSchedule based on selected date and current week
   const getWorkoutForDate = (date: Date) => {
     const dayOfWeek = format(date, 'EEEE'); // Get day name (e.g., "Monday")
-    const weekSchedule = trainingSchedule[currentWeek];
+
+    // Defensive checks: Ensure trainingSchedules and selectedPlan exist
+    if (!trainingSchedules || !trainingSchedules[selectedPlan]) {
+      console.error(`Training schedule not found for plan: ${selectedPlan}`);
+      return null;
+    }
+
+    const weekSchedule = trainingSchedules[selectedPlan][currentWeek]; // Access the correct plan and week
 
     if (!weekSchedule) {
+      console.error(`No schedule found for week ${currentWeek} in plan ${selectedPlan}`);
       return null; // No schedule for the current week
     }
 
@@ -131,7 +144,7 @@ export function Calendar() {
       mostFrequentWorkout,
       completedWorkouts
     };
-  }, [currentDate, days, trainingSchedule, currentWeek, progressData]); // Add dependencies
+  }, [currentDate, days, trainingSchedules, currentWeek, progressData, selectedPlan]); // Add selectedPlan as dependency
 
 
   const getDayColor = (workout: ReturnType<typeof getWorkoutForDate>) => { // Use ReturnType
