@@ -1,24 +1,31 @@
 export interface User {
   id: string;
-  name: string;
   email: string;
+  name: string;
   googleToken: string;
   trainingStartDate: Date;
 }
 
-export interface WorkoutLog {
-  id: string;
-  userId: string;
-  date: Date;
-  exerciseName: string;
-  sets: number[];
+export interface WorkoutPlan {
+  [day: string]: WorkoutDay;
 }
 
-export interface Achievement {
-  id: string;
-  userId: string;
+export interface WorkoutDay {
+  exercises: Exercise[];
+}
+
+export interface Exercise {
   name: string;
-  unlockedAt: Date;
+  sets: number;
+  targetReps: number;
+  type: 'reps' | 'time';
+}
+
+export interface ProgressEntry {
+  week: number;
+  [exercise: string]: number | boolean | string; // Allow numbers, booleans, and strings
+  skillPractice: boolean;
+  notes: string;
 }
 
 export interface HealthMetrics {
@@ -26,16 +33,4 @@ export interface HealthMetrics {
   caloriesBurned: number;
   activeMinutes: number;
   lastSynced: Date;
-}
-
-export interface Exercise {
-  name: string;
-  sets: number;
-  targetReps: string;
-  type: 'reps' | 'duration';
-}
-
-export interface DailyWorkout {
-  day: string;
-  exercises: Exercise[];
 }
