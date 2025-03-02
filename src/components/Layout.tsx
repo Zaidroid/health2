@@ -6,13 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
 
 export function Layout() {
-  const { user, signOut, loading, guest } = useAuth(); // Get guest from context
+  const { user, signOut, loading, guest } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    console.log("Layout useEffect: user =", user, "guest =", guest, "loading =", loading, "pathname =", location.pathname); // **ADD THIS**
+    console.log("Layout useEffect: user =", user, "guest =", guest, "loading =", loading, "pathname =", location.pathname);
     if (loading) return;
 
     // Redirect to login ONLY if not authenticated AND not a guest AND trying to access a protected route
@@ -37,24 +37,29 @@ export function Layout() {
       <nav className="bg-white dark:bg-dark-card shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <Link to="/" className="flex items-center px-2 py-2 text-gray-900 dark:text-dark-foreground">
-                <motion.div
-                  whileHover={{ rotate: 360 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <Activity className="h-8 w-8 text-indigo-600 dark:text-dark-primary" />
-                </motion.div>
-                <motion.span
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="ml-2 text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 text-transparent bg-clip-text"
-                >
-                  Zaid Health
-                </motion.span>
-              </Link>
+            {/* Logo and Navigation Links Container */}
+            <div className="flex items-center space-x-4">
+              {/* Logo Container */}
+              <div className="flex-shrink-0">
+                <Link to="/" className="flex items-center px-2 py-2 text-gray-900 dark:text-dark-foreground">
+                  <motion.div
+                    whileHover={{ rotate: 360 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <Activity className="h-8 w-8 text-indigo-600 dark:text-dark-primary" />
+                  </motion.div>
+                  <motion.span
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="ml-2 text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 text-transparent bg-clip-text"
+                  >
+                    Zaid Health
+                  </motion.span>
+                </Link>
+              </div>
 
-              <div className="hidden md:ml-6 md:flex md:space-x-8">
+              {/* Navigation Links */}
+              <div className="hidden md:flex md:space-x-4">
                 {navItems.map((item) => (
                   <Link
                     key={item.path}
@@ -77,28 +82,47 @@ export function Layout() {
               </div>
             </div>
 
-            <div className="flex items-center">
-              <div className="hidden md:flex items-center">
+            {/* Right Section: User Profile, Sign Out, Theme Toggle, Mobile Menu */}
+            <div className="flex items-center space-x-2">
+              {/* Desktop User Profile and Sign Out */}
+              <div className="hidden md:flex items-center space-x-4">
+                {/* Guest User Pill */}
+                {guest ? (
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      className="flex items-center bg-gray-200 dark:bg-gray-700 px-3 py-2 rounded-full"
+                    >
+                      <User className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2" />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Guest User</span>
+                    </motion.div>
+                ) : (
                 <motion.div
                   whileHover={{ scale: 1.05 }}
-                  className="flex items-center mr-4 bg-indigo-50 dark:bg-dark-card px-3 py-2 rounded-full"
+                  className="flex items-center bg-indigo-50 dark:bg-gray-700 px-3 py-2 rounded-full"
                 >
-                  <User className="h-5 w-5 text-indigo-600 dark:text-dark-primary mr-2" />
-                  <span className="text-sm font-medium text-indigo-700 dark:text-dark-text">{user?.name}</span>
+                  <User className="h-5 w-5 text-indigo-600 dark:text-gray-400 mr-2" />
+                  <span className="text-sm font-medium text-indigo-700 dark:text-gray-200">{user?.name}</span>
                 </motion.div>
-                
+                )}
+
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={signOut}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all duration-200 ml-4"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all duration-200"
                 >
                   <LogOut className="h-4 w-4 mr-2" />
                   Sign Out
                 </motion.button>
               </div>
-              <ThemeToggle />
-              <div className="flex md:hidden">
+
+              {/* Theme Toggle */}
+              <div className="ml-2">
+                <ThemeToggle />
+              </div>
+
+              {/* Mobile Menu Button */}
+              <div className="flex md:hidden ml-2">
                 <button
                   onClick={toggleMobileMenu}
                   className="inline-flex items-center justify-center p-2 rounded-md text-indigo-600 dark:text-dark-primary"
@@ -141,13 +165,21 @@ export function Layout() {
                   </Link>
                 ))}
                 <div className='flex px-3 py-2'>
-                <ThemeToggle />
+                  <ThemeToggle />
                 </div>
                 <div className="pt-4 pb-3 border-t border-gray-200 dark:border-dark-muted">
+                    {/* Mobile Guest User Pill */}
+                    {guest ? (
+                      <div className="flex items-center px-3 py-2">
+                        <User className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Guest User</span>
+                      </div>
+                    ) : (
                   <div className="flex items-center px-3 py-2">
                     <User className="h-5 w-5 text-indigo-600 dark:text-dark-primary mr-2" />
                     <span className="text-sm font-medium text-indigo-700 dark:text-dark-text">{user?.name}</span>
                   </div>
+                    )}
                   <button
                     onClick={() => {
                       signOut();

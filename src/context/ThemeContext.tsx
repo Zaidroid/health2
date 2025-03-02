@@ -23,7 +23,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // Initialize theme with local storage or 'system' as default
   const [theme, setTheme] = useState<Theme>(() => {
     const savedTheme = localStorage.getItem('theme') as Theme | null;
-    return savedTheme || 'system';
+    const initialTheme = savedTheme || 'light';
+    console.log("Initial theme from localStorage:", savedTheme);
+    console.log("Setting initial theme to:", initialTheme);
+    return initialTheme; // Default to light theme
   });
 
   // Initialize theme color
@@ -33,56 +36,64 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   });
 
   // Resolved theme tracks what's actually applied (light/dark)
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light'); // Force light initially
 
-  // Update theme when system preference changes
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
-    const handleChange = () => {
+  // Update resolved theme when theme changes (this should run BEFORE system preference check)
+    useEffect(() => {
+      console.log("useEffect: theme changed to:", theme);
       if (theme === 'system') {
-        setResolvedTheme(mediaQuery.matches ? 'dark' : 'light');
+        const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        console.log("System preference is dark:", isDarkMode);
+        setResolvedTheme(isDarkMode ? 'dark' : 'light');
+      } else {
+        console.log("Setting resolvedTheme to:", theme);
+        setResolvedTheme(theme as 'light' | 'dark');
       }
-    };
-    
-    // Set initial value
-    handleChange();
-    
-    // Listen for changes
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
+    }, [theme]);
 
-  // Update resolved theme when theme changes
-  useEffect(() => {
-    if (theme === 'system') {
-      const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setResolvedTheme(isDarkMode ? 'dark' : 'light');
-    } else {
-      setResolvedTheme(theme as 'light' | 'dark');
-    }
-  }, [theme]);
+    // Update theme when system preference changes
+    useEffect(() => {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+      const handleChange = () => {
+          console.log("System preference changed");
+        if (theme === 'system') {
+          setResolvedTheme(mediaQuery.matches ? 'dark' : 'light');
+        }
+      };
+
+      // Set initial value based on system preference only if theme is 'system'
+      if (theme === 'system') {
+          handleChange();
+      }
+
+      // Listen for changes
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }, [theme]); // Only depend on theme
+
 
   // Apply theme and color classes to document
   useEffect(() => {
     // Remove all theme classes
     document.documentElement.classList.remove('light', 'dark');
-    
+
     // Add current theme
+    console.log("Applying resolvedTheme:", resolvedTheme);
     document.documentElement.classList.add(resolvedTheme);
-    
+
     // Remove all color classes
     document.documentElement.classList.remove(
-      'theme-indigo', 
-      'theme-blue', 
-      'theme-purple', 
-      'theme-teal', 
+      'theme-indigo',
+      'theme-blue',
+      'theme-purple',
+      'theme-teal',
       'theme-emerald'
     );
-    
+
     // Add current color
     document.documentElement.classList.add(`theme-${themeColor}`);
-    
+
     // Save preferences
     localStorage.setItem('theme', theme);
     localStorage.setItem('themeColor', themeColor);
@@ -102,12 +113,12 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   };
 
   return (
-    <ThemeContext.Provider 
-      value={{ 
-        theme, 
-        themeColor, 
-        toggleTheme, 
-        setThemeManually, 
+    <ThemeContext.Provider
+      value={{
+        theme,
+        themeColor,
+        toggleTheme,
+        setThemeManually,
         setThemeColor,
         resolvedTheme
       }}
