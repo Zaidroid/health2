@@ -21,11 +21,26 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useWorkout } from '../context/WorkoutContext';
 import { HealthMetrics, Exercise } from '../types';
 import { motion } from 'framer-motion';
 
 export function Dashboard() {
   const { user } = useAuth();
+  const { progressData, currentWeek, updateProgressEntry } = useWorkout();
+  
+  // Get the current week's progress data
+  const currentWeekData = progressData.find(entry => entry.week === currentWeek) || {
+    week: currentWeek,
+    pushups: 0,
+    pullups: 0,
+    dips: 0,
+    plank: 0,
+    handstand: 0,
+    skillPractice: false,
+    notes: ""
+  };
+  
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>({
     steps: 8432,
     caloriesBurned: 420,
@@ -33,7 +48,8 @@ export function Dashboard() {
     lastSynced: new Date(),
   });
 
-  const [todaysWorkout] = useState<Exercise[]>([
+  // Define today's workout based on WorkoutContext
+  const todaysWorkout: Exercise[] = [
     {
       name: 'Push-ups',
       sets: 3,
@@ -41,22 +57,39 @@ export function Dashboard() {
       type: 'reps',
     },
     {
+      name: 'Pull-ups',
+      sets: 3,
+      targetReps: '3-8',
+      type: 'reps',
+    },
+    {
+      name: 'Dips',
+      sets: 3,
+      targetReps: '8-12',
+      type: 'reps',
+    },
+    {
       name: 'Plank',
       sets: 3,
-      targetReps: '20-30',
+      targetReps: '20-40',
       type: 'duration',
     },
     {
-      name: 'Squats',
+      name: 'Handstand',
       sets: 3,
-      targetReps: '15-20',
-      type: 'reps',
+      targetReps: '10-30',
+      type: 'duration',
     },
-  ]);
+  ];
 
-  const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: number[] }>(
-    {},
-  );
+  // Track workout input values
+  const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: number[] }>({
+    pushups: Array(3).fill(0),
+    pullups: Array(3).fill(0),
+    dips: Array(3).fill(0),
+    plank: Array(3).fill(0),
+    handstand: Array(3).fill(0),
+  });
 
   const handleSyncGoogleFit = async () => {
     // TODO: Implement Google Fit sync
@@ -64,17 +97,36 @@ export function Dashboard() {
   };
 
   const handleSaveWorkout = () => {
-    // TODO: Implement workout saving
-    console.log('Saving workout...');
+    // Update all exercise values in the WorkoutContext
+    // For each exercise, take the maximum value across all sets
+    const exercises = ['pushups', 'pullups', 'dips', 'plank', 'handstand'] as const;
+    
+    exercises.forEach(exercise => {
+      const values = workoutLogs[exercise] || [];
+      if (values.length > 0) {
+        const maxValue = Math.max(...values.filter(v => v > 0));
+        if (maxValue > 0) {
+          updateProgressEntry(currentWeek, exercise, maxValue);
+        }
+      }
+    });
+    
+    console.log('Workout saved for week', currentWeek);
   };
 
-  const progressData = [
-    { date: '2025-02-10', pushups: 10, planks: 20, squats: 15 },
-    { date: '2025-02-11', pushups: 12, planks: 25, squats: 16 },
-    { date: '2025-02-12', pushups: 13, planks: 30, squats: 17 },
-    { date: '2025-02-13', pushups: 14, planks: 32, squats: 18 },
-    { date: '2025-02-14', pushups: 15, planks: 35, squats: 19 },
-  ];
+  // Convert progress data to chart format
+  const generateProgressChartData = () => {
+    return progressData.map(entry => ({
+      week: `Week ${entry.week}`,
+      pushups: entry.pushups,
+      pullups: entry.pullups,
+      dips: entry.dips,
+      plank: entry.plank,
+      handstand: entry.handstand,
+    }));
+  };
+
+  const progressChartData = generateProgressChartData();
 
   // Animation variants
   const container = {
@@ -120,12 +172,12 @@ export function Dashboard() {
               <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg px-4 py-3 flex items-center">
                 <Clock className="h-5 w-5 text-white mr-2" />
                 <span className="text-white text-sm">
-                  Last workout: Yesterday
+                  Current Week: {currentWeek}
                 </span>
               </div>
               <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg px-4 py-3 flex items-center">
                 <Calendar className="h-5 w-5 text-white mr-2" />
-                <span className="text-white text-sm">Streak: 5 days</span>
+                <span className="text-white text-sm">Total Weeks: {progressData.length}</span>
               </div>
             </div>
           </div>
@@ -270,7 +322,7 @@ export function Dashboard() {
         </div>
       </motion.section>
 
-      {/* Today's Workout */}
+      {/* Today's Workout - Now using WorkoutContext data */}
       <motion.section
         className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
         variants={item}
@@ -278,7 +330,7 @@ export function Dashboard() {
         <div className="border-b border-gray-200 dark:border-gray-700 p-5">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-200 flex items-center">
             <Dumbbell className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" />
-            Today's Workout
+            Week {currentWeek} Workout
           </h2>
         </div>
         <div className="p-5">
@@ -303,33 +355,77 @@ export function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
-                  {Array.from({ length: exercise.sets }).map((_, setIndex) => (
-                    <motion.div
-                      key={setIndex}
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <input
-                        type="number"
-                        placeholder={`Set ${setIndex + 1}`}
-                        className="input"
-                        value={workoutLogs[exercise.name]?.[setIndex] || ''}
-                        onChange={(e) => {
-                          const newLogs = { ...workoutLogs };
-                          if (!newLogs[exercise.name]) {
-                            newLogs[exercise.name] = [];
-                          }
-                          newLogs[exercise.name][setIndex] = parseInt(
-                            e.target.value,
-                          );
-                          setWorkoutLogs(newLogs);
-                        }}
-                      />
-                    </motion.div>
-                  ))}
+                  {Array.from({ length: exercise.sets }).map((_, setIndex) => {
+                    // Convert exercise name to the property name in WorkoutContext
+                    const exerciseKey = exercise.name.toLowerCase().replace('-', '');
+                    
+                    return (
+                      <motion.div
+                        key={setIndex}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                      >
+                        <input
+                          type="number"
+                          placeholder={`Set ${setIndex + 1}`}
+                          className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          value={workoutLogs[exerciseKey]?.[setIndex] || ''}
+                          onChange={(e) => {
+                            const newLogs = { ...workoutLogs };
+                            if (!newLogs[exerciseKey]) {
+                              newLogs[exerciseKey] = [];
+                            }
+                            newLogs[exerciseKey][setIndex] = parseInt(
+                              e.target.value || '0',
+                            );
+                            setWorkoutLogs(newLogs);
+                          }}
+                        />
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </motion.div>
             ))}
+            
+            {/* Skill Practice Checkbox */}
+            <motion.div 
+              className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-100 dark:border-gray-700"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="skillPractice"
+                  checked={currentWeekData.skillPractice}
+                  onChange={() => updateProgressEntry(currentWeek, 'skillPractice', !currentWeekData.skillPractice)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="skillPractice" className="ml-2 block text-sm text-gray-900 dark:text-gray-200">
+                  Completed Skill Practice Session
+                </label>
+              </div>
+            </motion.div>
+            
+            {/* Notes Field */}
+            <motion.div 
+              className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-100 dark:border-gray-700"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Workout Notes
+              </label>
+              <textarea
+                id="notes"
+                rows={3}
+                className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="How did the workout feel?"
+                value={currentWeekData.notes}
+                onChange={(e) => updateProgressEntry(currentWeek, 'notes', e.target.value)}
+              ></textarea>
+            </motion.div>
           </div>
           <motion.button
             whileHover={{ scale: 1.02 }}
@@ -342,7 +438,7 @@ export function Dashboard() {
         </div>
       </motion.section>
 
-      {/* Progress Charts */}
+      {/* Progress Charts - Using WorkoutContext data */}
       <motion.section
         className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
         variants={item}
@@ -356,10 +452,10 @@ export function Dashboard() {
         <div className="p-5">
           <div className="w-full h-64 sm:h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={progressData}>
+              <LineChart data={progressChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis
-                  dataKey="date"
+                  dataKey="week"
                   stroke="#6366F1"
                   tickMargin={10}
                   tick={{ fill: 'rgb(100, 100, 130)' }}
@@ -390,10 +486,10 @@ export function Dashboard() {
                 />
                 <Line
                   type="monotone"
-                  dataKey="planks"
+                  dataKey="pullups"
                   stroke="#8B5CF6"
                   strokeWidth={2}
-                  name="Plank (seconds)"
+                  name="Pull-ups"
                   dot={{ stroke: '#8B5CF6', strokeWidth: 2, r: 4, fill: 'white' }}
                   activeDot={{
                     stroke: '#8B5CF6',
@@ -404,16 +500,44 @@ export function Dashboard() {
                 />
                 <Line
                   type="monotone"
-                  dataKey="squats"
+                  dataKey="dips"
                   stroke="#EC4899"
                   strokeWidth={2}
-                  name="Squats"
+                  name="Dips"
                   dot={{ stroke: '#EC4899', strokeWidth: 2, r: 4, fill: 'white' }}
                   activeDot={{
                     stroke: '#EC4899',
                     strokeWidth: 2,
                     r: 6,
                     fill: '#EC4899',
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="plank"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  name="Plank (seconds)"
+                  dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
+                  activeDot={{
+                    stroke: '#10B981',
+                    strokeWidth: 2,
+                    r: 6,
+                    fill: '#10B981',
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="handstand"
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  name="Handstand (seconds)"
+                  dot={{ stroke: '#F59E0B', strokeWidth: 2, r: 4, fill: 'white' }}
+                  activeDot={{
+                    stroke: '#F59E0B',
+                    strokeWidth: 2,
+                    r: 6,
+                    fill: '#F59E0B',
                   }}
                 />
               </LineChart>

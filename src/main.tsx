@@ -2,10 +2,15 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
-import '../global.css'; // Ensure global.css is imported here
+import { AuthProvider } from './context/AuthContext';
+import { WorkoutProvider } from './context/WorkoutContext'; // Import WorkoutProvider
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <AuthProvider>
+      <WorkoutProvider> {/* Wrap the App with WorkoutProvider */}
+        <App />
+      </WorkoutProvider>
+    </AuthProvider>
   </React.StrictMode>,
 );
