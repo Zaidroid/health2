@@ -164,18 +164,16 @@ export function Layout() {
                     </div>
                   </Link>
                 ))}
-                <div className='flex px-3 py-2'>
-                  <ThemeToggle />
-                </div>
+                {/* Removed the duplicate ThemeToggle from here */}
                 <div className="pt-4 pb-3 border-t border-gray-200 dark:border-dark-muted">
                     {/* Mobile Guest User Pill */}
                     {guest ? (
-                      <div className="flex items-center px-3 py-2">
+                      <div className="flex items-center px-3 py-2 rounded-full bg-gray-200 dark:bg-gray-700">
                         <User className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2" />
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Guest User</span>
                       </div>
                     ) : (
-                  <div className="flex items-center px-3 py-2">
+                  <div className="flex items-center px-3 py-2 rounded-full bg-indigo-50 dark:bg-gray-700">
                     <User className="h-5 w-5 text-indigo-600 dark:text-dark-primary mr-2" />
                     <span className="text-sm font-medium text-indigo-700 dark:text-dark-text">{user?.name}</span>
                   </div>
