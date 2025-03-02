@@ -172,6 +172,23 @@ export function WorkoutProgress() {
 
   const chartData = generateChartData();
 
+  // Calculate exercise frequency for the current week and get the top 4
+  let exerciseFrequency: { [key: string]: number } = {};
+  if (trainingSchedule) {
+    trainingSchedule.forEach((day) => {
+      day.exercises.forEach((exercise) => {
+        const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
+        exerciseFrequency[exerciseKey] = (exerciseFrequency[exerciseKey] || 0) + 1;
+      });
+    });
+  }
+
+  const topFourExercises = Object.entries(exerciseFrequency)
+    .sort(([, freqA], [, freqB]) => freqB - freqA)
+    .slice(0, 4)
+    .map((entry) => entry[0]);
+
+
   return (
     <motion.div
       className="space-y-8"
@@ -229,31 +246,32 @@ export function WorkoutProgress() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
 
-              {/* Dynamically generate input fields based on the current week's exercises */}
-              {trainingSchedule && trainingSchedule.map((day) =>
-                day.exercises.map((exercise, index) => {
-                  const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
-                  return (
-                    <motion.div
-                      key={`${currentWeek}-${exerciseKey}`} // Unique key
-                      className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
-                      whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
-                    >
-                      <div className="flex items-center mb-2">
-                        <Dumbbell className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-                        <h3 className="font-medium text-gray-700 dark:text-gray-300">{exercise.name}</h3>
-                      </div>
-                      <input
-                        type="number"
-                        value={currentWeekData[exerciseKey] || ''}
-                        onChange={(e) => updateProgressEntry(exerciseKey, parseInt(e.target.value))}
-                        className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
-                        placeholder={exercise.type === 'reps' ? "Max reps" : "Seconds"}
-                      />
-                    </motion.div>
-                  );
-                })
-              )}
+              {/* Display input fields ONLY for the top four exercises */}
+              {trainingSchedule &&
+                trainingSchedule.map((day) =>
+                  day.exercises.filter(exercise => topFourExercises.includes(exercise.name.toLowerCase().replace(/[- ]/g, ''))).map((exercise) => {
+                    const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
+                    return (
+                      <motion.div
+                        key={`${currentWeek}-${exerciseKey}`} // Unique key
+                        className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
+                        whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
+                      >
+                        <div className="flex items-center mb-2">
+                          <Dumbbell className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
+                          <h3 className="font-medium text-gray-700 dark:text-gray-300">{exercise.name}</h3>
+                        </div>
+                        <input
+                          type="number"
+                          value={currentWeekData[exerciseKey] || ''}
+                          onChange={(e) => updateProgressEntry(exerciseKey, parseInt(e.target.value))}
+                          className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
+                          placeholder={exercise.type === 'reps' ? "Max reps" : "Seconds"}
+                        />
+                      </motion.div>
+                    );
+                  })
+                )}
 
               <motion.div
                 className="flex items-center bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
