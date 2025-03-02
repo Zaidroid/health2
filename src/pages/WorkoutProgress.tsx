@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { AnimatedCard } from '../components/AnimatedComponents';
 import { useWorkout } from '../context/WorkoutContext';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase'; // Import Supabase client
 
 type ExerciseProgress = {
   week: number;
@@ -14,11 +15,15 @@ type ExerciseProgress = {
 };
 
 export function WorkoutProgress() {
-  const { currentWeek, setCurrentWeek, progressData, trainingSchedules, progressionPlans } = useWorkout();
+  const { currentWeek, setCurrentWeek, progressData, trainingSchedules, progressionPlans, updateProgressEntry: globalUpdateProgressEntry } = useWorkout();
   const { user } = useAuth();
   const selectedPlan = user?.selectedPlan || "Z Axis";
 
   const [localProgressData, setLocalProgressData] = useState<ExerciseProgress[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [saveMessage, setSaveMessage] = useState('');
+
 
   // Initialize localProgressData based on the selected plan
   useEffect(() => {
@@ -91,15 +96,24 @@ export function WorkoutProgress() {
     setCurrentWeek(newWeek);
   };
 
-  const updateProgressEntry = (field: string, value: any) => { // field is now a string
-    const updatedData = localProgressData.map(entry => {
+  // Updated to handle type coercion and update local state
+const updateProgressEntry = (field: string, value: string | number | boolean) => {
+  setLocalProgressData(prevData =>
+    prevData.map(entry => {
       if (entry.week === currentWeek) {
-        return { ...entry, [field]: value };
+        // Handle potential type differences
+        let updatedValue = value;
+        if (typeof entry[field] === 'number' && typeof value === 'string') {
+          updatedValue = parseInt(value, 10) || 0; // Convert to number, default to 0 if NaN
+        } else if (typeof entry[field] === 'boolean' && typeof value === 'string') {
+          updatedValue = value === 'true'; // Convert string to boolean
+        }
+        return { ...entry, [field]: updatedValue };
       }
       return entry;
-    });
-    setLocalProgressData(updatedData);
-  };
+    })
+  );
+};
 
   const handleWeekChange = (direction: 'prev' | 'next') => {
     if (direction === 'prev' && currentWeek > 1) {
@@ -148,7 +162,7 @@ export function WorkoutProgress() {
     show: { opacity: 1, y: 0 }
   };
 
-    // Prepare chart data, only including exercises that exist in the current plan
+  // Prepare chart data, only including exercises that exist in the current plan
   const generateChartData = () => {
     return localProgressData.map(entry => {
       const chartEntry: any = { week: `Week ${entry.week}` };
@@ -174,23 +188,112 @@ export function WorkoutProgress() {
 
   // Calculate exercise frequency for the current week and get the top 4
   let exerciseFrequency: { [key: string]: number } = {};
-    if (trainingSchedule) {
-        trainingSchedule.forEach((day) => {
-            day.exercises.forEach((exercise) => {
-                const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
-                if (exerciseFrequency[exerciseKey]) {
-                    exerciseFrequency[exerciseKey]++;
-                } else {
-                    exerciseFrequency[exerciseKey] = 1;
-                }
-            });
-        });
-    }
+  if (trainingSchedule) {
+    trainingSchedule.forEach((day) => {
+      day.exercises.forEach((exercise) => {
+        const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
+        if (exerciseFrequency[exerciseKey]) {
+          exerciseFrequency[exerciseKey]++;
+        } else {
+          exerciseFrequency[exerciseKey] = 1;
+        }
+      });
+    });
+  }
 
   const topFourExercises = Object.entries(exerciseFrequency)
     .sort(([, freqA], [, freqB]) => freqB - freqA)
     .slice(0, 4)
     .map((entry) => entry[0]);
+
+
+  // Save progress to Supabase
+  const saveProgress = async () => {
+    if (!user) {
+      setSaveStatus('error');
+      setSaveMessage('You must be logged in to save progress.');
+      return;
+    }
+
+    setSaveStatus('saving');
+    setLoading(true);
+    setSaveMessage('');
+
+    try {
+      const currentWeekProgress = localProgressData.find(entry => entry.week === currentWeek);
+
+      if (!currentWeekProgress) {
+        setSaveStatus('error');
+        setSaveMessage('No progress data found for the current week.');
+        setLoading(false);
+        return;
+      }
+
+      const updates = [];
+
+      for (const key in currentWeekProgress) {
+        if (key !== 'week' && key !== 'notes' && key !== 'skillPractice') {
+          const exerciseName = key;
+          const exerciseValue = currentWeekProgress[key];
+
+          updates.push({
+            user_id: user.id,
+            week: currentWeek,
+            exercise_name: exerciseName,
+            value: exerciseValue, // Store the actual value (reps or duration)
+          });
+        }
+      }
+
+      // Add skillPractice and notes separately, as they are not tied to a specific exercise
+      updates.push({
+        user_id: user.id,
+        week: currentWeek,
+        exercise_name: 'skillPractice',
+        value: currentWeekProgress.skillPractice,
+      });
+      updates.push({
+        user_id: user.id,
+        week: currentWeek,
+        exercise_name: 'notes',
+        value: currentWeekProgress.notes,
+      });
+
+      const { error } = await supabase.from('user_progress').upsert(updates, { onConflict: 'user_id, week, exercise_name' });
+
+      if (error) {
+        throw error;
+      }
+
+      setSaveStatus('success');
+      setSaveMessage('Progress saved successfully!');
+
+      // Update the global context after successful save
+      updates.forEach(update => {
+          if (update.exercise_name !== 'skillPractice' && update.exercise_name !== 'notes') {
+              globalUpdateProgressEntry(update.week, update.exercise_name, update.value);
+          }
+      });
+      if (currentWeekProgress.skillPractice !== undefined) {
+        globalUpdateProgressEntry(currentWeek, 'skillPractice', currentWeekProgress.skillPractice);
+      }
+      if (currentWeekProgress.notes) {
+        globalUpdateProgressEntry(currentWeek, 'notes', currentWeekProgress.notes);
+      }
+
+
+    } catch (error: any) {
+      setSaveStatus('error');
+      setSaveMessage(error.message || 'Failed to save progress.');
+      console.error('Error saving progress:', error);
+    } finally {
+      setLoading(false);
+      setTimeout(() => {
+        setSaveStatus('idle');
+        setSaveMessage('');
+      }, 5000); // Clear success/error message after 5 seconds
+    }
+  };
 
 
   return (
@@ -268,7 +371,7 @@ export function WorkoutProgress() {
                     <input
                       type="number"
                       value={currentWeekData[exerciseKey] || ''}
-                      onChange={(e) => updateProgressEntry(exerciseKey, parseInt(e.target.value))}
+                      onChange={(e) => updateProgressEntry(exerciseKey, e.target.value)}
                       className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
                       placeholder={exercise.type === 'reps' ? "Max reps" : "Seconds"}
                     />
@@ -283,7 +386,7 @@ export function WorkoutProgress() {
                 <input
                   type="checkbox"
                   id="skillPractice"
-                  checked={currentWeekData.skillPractice}
+                  checked={currentWeekData.skillPractice === true}
                   onChange={(e) => updateProgressEntry('skillPractice', e.target.checked)}
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                 />
@@ -390,12 +493,25 @@ export function WorkoutProgress() {
           </div>
 
           <motion.button
+            onClick={saveProgress}
+            disabled={loading}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="w-full mt-6 px-4 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-md transition-all duration-200"
+            className={`${loading
+                ? 'bg-indigo-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
+              } w-full mt-6 px-4 py-3 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-md transition-all duration-200`}
           >
-            Save Progress
+            {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'success' ? 'Saved!' : 'Save Progress'}
           </motion.button>
+          {saveMessage && (
+            <p
+              className={`mt-2 text-sm ${saveStatus === 'error' ? 'text-red-600' : 'text-green-600'
+                }`}
+            >
+              {saveMessage}
+            </p>
+          )}
         </div>
       </motion.section>
 

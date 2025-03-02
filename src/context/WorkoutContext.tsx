@@ -1,12 +1,13 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
-// Define types for the training schedule
 type ExerciseType = 'reps' | 'duration';
 
 interface Exercise {
   name: string;
   sets: number;
-  targetReps?: string; // Optional because it might be duration-based
+  targetReps?: string;
   type: ExerciseType;
 }
 
@@ -19,10 +20,9 @@ interface WeeklyPlan {
   [week: number]: DailyWorkout[];
 }
 
-// Define a type for the user's progress data
 interface UserProgressEntry {
   week: number;
-  [exerciseName: string]: number | boolean | string; // Flexible to store reps, duration, or notes
+  [exerciseName: string]: number | boolean | string;
 }
 
 type WorkoutContextType = {
@@ -33,6 +33,7 @@ type WorkoutContextType = {
   getPlannedWorkout: (planName: string) => DailyWorkout | undefined;
   trainingSchedules: { [planName: string]: WeeklyPlan };
   progressionPlans: { [planName: string]: { [week: number]: { [exerciseName: string]: string } } };
+  setProgressData: (data: UserProgressEntry[]) => void;
 };
 
 const WorkoutContext = createContext<WorkoutContextType | undefined>(undefined);
@@ -41,7 +42,6 @@ type WorkoutProviderProps = {
   children: ReactNode;
 };
 
-// Training Schedule (Constant) - Z Axis
 const zAxisTrainingSchedule: WeeklyPlan = {
   1: [
     {
@@ -60,7 +60,7 @@ const zAxisTrainingSchedule: WeeklyPlan = {
         { name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' },
       ],
     },
-    { day: 'Wednesday', exercises: [] }, // Rest
+    { day: 'Wednesday', exercises: [] },
     {
       day: 'Thursday',
       exercises: [
@@ -86,7 +86,7 @@ const zAxisTrainingSchedule: WeeklyPlan = {
         { name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' },
       ],
     },
-    { day: 'Sunday', exercises: [] }, // Rest
+    { day: 'Sunday', exercises: [] },
   ],
   2: [
     {
@@ -315,7 +315,6 @@ const zAxisTrainingSchedule: WeeklyPlan = {
   ],
 };
 
-// Progression Plan (Constant) - Z Axis
 const zAxisProgressionPlan = {
   1: { 'Push-ups': '10-15', 'Pull-ups': '3-5', 'Standard plank': '20-30' },
   2: { 'Push-ups': '10-15', 'Pull-ups': '3-5', 'Standard plank': '20-30' },
@@ -325,7 +324,6 @@ const zAxisProgressionPlan = {
   6: { 'Push-ups': '20+',    'Pull-ups': '5-7', 'Standard plank': '45-60' },
 };
 
-// T Bone Training Schedule
 const tBoneTrainingSchedule: WeeklyPlan = {
     1: [
       {
@@ -346,7 +344,7 @@ const tBoneTrainingSchedule: WeeklyPlan = {
           { name: 'Plank', sets: 3, targetReps: '20s', type: 'duration' },
         ],
       },
-      { day: 'Tuesday', exercises: [] }, // Rest
+      { day: 'Tuesday', exercises: [] },
       {
         day: 'Wednesday',
         exercises: [
@@ -365,7 +363,7 @@ const tBoneTrainingSchedule: WeeklyPlan = {
           { name: 'Plank', sets: 3, targetReps: '20s', type: 'duration' },
         ],
       },
-      { day: 'Friday', exercises: [] }, // Rest
+      { day: 'Friday', exercises: [] },
       {
         day: 'Saturday',
         exercises: [
@@ -528,7 +526,7 @@ const tBoneTrainingSchedule: WeeklyPlan = {
       },
     ],
 };
-// Placeholder for T Bone Progression Plan
+
 const tBoneProgressionPlan = {
     1: {
         'Dumbbell Bicep Curls': '3x10',
@@ -552,7 +550,7 @@ const tBoneProgressionPlan = {
     },
     3: {
         'Dumbbell Bicep Curls': '3x12',
-        'Dumbbell Lateral Raises': '3x12',
+        'DumbbellLateral Raises': '3x12',
         'Dumbbell Overhead Press': '3x12',
         'Push-Ups': '3x12',
         'Lying Leg Raises': '3x15',
@@ -577,27 +575,73 @@ const tBoneProgressionPlan = {
 export const WorkoutProvider = ({ children }: WorkoutProviderProps) => {
   const [currentWeek, setCurrentWeek] = useState(1);
   const [progressData, setProgressData] = useState<UserProgressEntry[]>([]);
+  const { user } = useAuth();
 
-  const updateProgressEntry = (
+  const updateProgressEntry = async (
     week: number,
     exerciseName: string,
     value: number | boolean | string,
   ) => {
+    // *** CRITICAL: Log all inputs to updateProgressEntry ***
+    console.log("updateProgressEntry - week:", week, "exerciseName:", exerciseName, "value:", value);
+
+    if (!user) {
+      console.error("No user logged in.");
+      return;
+    }
+
     setProgressData((prevProgress) => {
       const weekIndex = prevProgress.findIndex((entry) => entry.week === week);
 
       if (weekIndex > -1) {
-        // Update existing week
         const updatedWeek = { ...prevProgress[weekIndex], [exerciseName]: value };
         const updatedProgress = [...prevProgress];
         updatedProgress[weekIndex] = updatedWeek;
+        console.log("Updated progressData:", updatedProgress);
         return updatedProgress;
       } else {
-        // Add new week
         const newWeekEntry: UserProgressEntry = { week, [exerciseName]: value };
-        return [...prevProgress, newWeekEntry];
+        const updatedProgress = [...prevProgress, newWeekEntry];
+        console.log("Updated progressData:", updatedProgress);
+        return updatedProgress;
       }
     });
+
+    try {
+      // *** CRITICAL: Log the data being sent to Supabase ***
+      console.log("Upserting data:", {
+        user_id: user.id,
+        week,
+        exercise_name: exerciseName,
+        max_value: value, // Ensure this is a number
+        skill_practice: false, // Default, will be updated separately
+        notes: '', // Default, will be updated separately
+      });
+
+      const { error, data } = await supabase
+        .from('user_progress')
+        .upsert(
+          [
+            {
+              user_id: user.id,
+              week,
+              exercise_name: exerciseName,
+              max_value: value, // Correctly using the 'value' parameter
+              skill_practice: false, // Default values, handled separately
+              notes: '',
+            },
+          ],
+          { onConflict: 'user_id, week, exercise_name' },
+        );
+
+      if (error) {
+        console.error('Error updating progress:', error);
+      } else {
+        console.log('Progress updated successfully:', data);
+      }
+    } catch (err) {
+      console.error('An unexpected error occurred:', err);
+    }
   };
 
   const getPlannedWorkout = (planName: string) => {
@@ -616,7 +660,8 @@ export const WorkoutProvider = ({ children }: WorkoutProviderProps) => {
     updateProgressEntry,
     getPlannedWorkout,
     trainingSchedules: { "Z Axis": zAxisTrainingSchedule, "T Bone": tBoneTrainingSchedule },
-    progressionPlans: { "Z Axis": zAxisProgressionPlan, "T Bone": tBoneProgressionPlan }
+    progressionPlans: { "Z Axis": zAxisProgressionPlan, "T Bone": tBoneProgressionPlan },
+    setProgressData,
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -25,69 +25,105 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkout } from '../context/WorkoutContext';
 import { HealthMetrics } from '../types';
 import { motion } from 'framer-motion';
+import { supabase } from '../lib/supabase';
 
 export function Dashboard() {
   const { user } = useAuth();
-  const selectedPlan = user?.selectedPlan || "Z Axis"; // Get selected plan
+  const selectedPlan = user?.selectedPlan || "Z Axis";
   const {
     progressData,
     currentWeek,
     updateProgressEntry,
     getPlannedWorkout,
-    trainingSchedule
+    trainingSchedules,
+    setProgressData,
   } = useWorkout();
 
-  // Get today's planned workout using the context function, passing the selected plan
   const todaysWorkout = getPlannedWorkout(selectedPlan);
-
-  // Get the current day name
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-
-  // Get the current week's progress data
   const currentWeekData = progressData.find(entry => entry.week === currentWeek) || {
     week: currentWeek,
     skillPractice: false,
     notes: ""
   };
 
-  const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>({
-    steps: 8432,
-    caloriesBurned: 420,
-    activeMinutes: 45,
-    lastSynced: new Date(),
-  });
-
-  // Track workout input values - will be populated dynamically based on today's exercises
   const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: number[] }>({});
+  const [loadingProgress, setLoadingProgress] = useState(false);
+
+    useEffect(() => {
+    const fetchProgress = async () => {
+      if (user) {
+        setLoadingProgress(true);
+        try {
+          const { data, error } = await supabase
+            .from('user_progress')
+            .select('*')
+            .eq('user_id', user.id);
+
+          if (error) {
+            console.error('Error fetching progress data:', error);
+          } else if (data) {
+            // Transform the data into the format expected by the context
+            const transformedData = data.map(item => ({
+                week: item.week,
+                [item.exercise_name]: item.max_value, // Use exercise_name as the key
+                skillPractice: item.skill_practice,
+                notes: item.notes
+            }));
+            setProgressData(transformedData);
+          }
+        } catch (err) {
+          console.error('An unexpected error occurred:', err);
+        } finally {
+          setLoadingProgress(false);
+        }
+      }
+    };
+
+    fetchProgress();
+  }, [user, setProgressData]);
+
+
+  useEffect(() => {
+    console.log("progressData in Dashboard:", progressData);
+  }, [progressData]);
+
 
   const handleSyncGoogleFit = async () => {
-    // TODO: Implement Google Fit sync
     console.log('Syncing with Google Fit...');
   };
 
   const handleSaveWorkout = () => {
-    // Only proceed if there is a workout for today
     if (!todaysWorkout || todaysWorkout.exercises.length === 0) return;
 
-    // For each exercise, take the maximum value across all sets
     todaysWorkout.exercises.forEach(exercise => {
       const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
       const values = workoutLogs[exerciseKey] || [];
 
-      if (values.length > 0) {
-        const maxValue = Math.max(...values.filter(v => v > 0));
+      // Filter out empty strings and convert to numbers
+      const numericValues = values.filter(v => v !== null && v !== undefined && v !== "").map(Number);
+
+
+      if (numericValues.length > 0) {
+        const maxValue = Math.max(...numericValues);
+        // Ensure maxValue is a positive number
         if (maxValue > 0) {
-          updateProgressEntry(currentWeek, exerciseKey, maxValue);
+          // *** CRITICAL: Log maxValue and exercise.name ***
+          console.log("maxValue:", maxValue, "exercise.name:", exercise.name);
+          updateProgressEntry(currentWeek, exercise.name, maxValue);
+        } else {
+            console.log(`Skipping ${exercise.name} because maxValue is not positive:`, maxValue);
         }
+      } else {
+          console.log(`Skipping ${exercise.name} because no valid values were entered.`);
       }
     });
 
     console.log('Daily workout saved for', today, 'in week', currentWeek);
   };
 
-  // Initialize workout logs for today's exercises
   React.useEffect(() => {
-    if (todaysWorkout && todaysWorkout.exercises.length > 0) {
+    if (todaysWorkout && todaysWorkout.exercises.length === 0) {
       const newLogs: { [key: string]: number[] } = {};
 
       todaysWorkout.exercises.forEach(exercise => {
@@ -99,18 +135,22 @@ export function Dashboard() {
     }
   }, [todaysWorkout]);
 
-  // Convert progress data to chart format, filtering by exercises in the selected plan
   const generateProgressChartData = () => {
+    const planSchedule = trainingSchedules[selectedPlan] ?? {};
+
     return progressData.map(entry => {
       const chartEntry: any = { week: `Week ${entry.week}` };
 
-      // Add all exercise properties from the entry *that are part of the current plan*
       Object.keys(entry).forEach(key => {
         if (key !== 'week' && key !== 'skillPractice' && key !== 'notes' && typeof entry[key] === 'number') {
-          // Check if this exercise key exists in the current week's training schedule for the selected plan
-          const exerciseExistsInPlan = trainingSchedule[selectedPlan]?.[entry.week]?.some(day =>
-            day.exercises.some(ex => ex.name.toLowerCase().replace(/[- ]/g, '') === key)
-          );
+          const weekSchedule = planSchedule[entry.week] ?? [];
+
+          const exerciseExistsInPlan = weekSchedule.some(day => {
+            const exercises = day.exercises ?? [];
+            return exercises.some(ex => {
+              return ex.name.toLowerCase().replace(/[- ]/g, '') === key;
+            });
+          });
 
           if (exerciseExistsInPlan) {
             chartEntry[key] = entry[key];
@@ -124,7 +164,6 @@ export function Dashboard() {
 
   const progressChartData = generateProgressChartData();
 
-  // Animation variants
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -140,6 +179,14 @@ export function Dashboard() {
     show: { opacity: 1, y: 0 },
   };
 
+    const latestWeekData = progressData.reduce((acc, entry) => {
+        return entry.week >= acc.week ? entry : acc;
+    }, { week: 0 });
+
+    const derivedSteps = latestWeekData ? (latestWeekData['pushups'] || 0) * 100 : 0;
+    const derivedCalories = latestWeekData ? (latestWeekData['pullups'] || 0) * 50 : 0;
+    const derivedActiveMinutes = latestWeekData ? (latestWeekData['standardplank'] || 0) * 2 : 0;
+
   return (
     <motion.div
       className="space-y-6"
@@ -147,7 +194,11 @@ export function Dashboard() {
       initial="hidden"
       animate="show"
     >
-      {/* Welcome & Summary Banner */}
+      {loadingProgress && (
+        <div className="fixed inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-75">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-purple-500"></div>
+        </div>
+      )}
       <motion.section
         className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
         variants={item}
@@ -180,7 +231,6 @@ export function Dashboard() {
         </div>
       </motion.section>
 
-      {/* Health Metrics Cards */}
       <motion.section variants={item}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-200 flex items-center">
@@ -194,11 +244,12 @@ export function Dashboard() {
             className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-gray-800 hover:bg-indigo-100 dark:hover:bg-gray-700 shadow-sm transition-all duration-200"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            <span>Sync Google Fit</span> {/* Corrected button text */}
+            <span>Sync Google Fit</span>
           </motion.button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Steps Widget */}
           <motion.div
             className="bg-white dark:bg-dark-card p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
             whileHover={{
@@ -219,7 +270,7 @@ export function Dashboard() {
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
                 >
-                  {healthMetrics.steps.toLocaleString()}
+                  {derivedSteps.toLocaleString()}
                 </motion.p>
                 <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1 flex items-center">
                   <TrendingUp className="h-3 w-3 mr-1" />
@@ -238,6 +289,7 @@ export function Dashboard() {
             </p>
           </motion.div>
 
+          {/* Calories Burned Widget */}
           <motion.div
             className="bg-white dark:bg-dark-card p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
             whileHover={{
@@ -258,7 +310,7 @@ export function Dashboard() {
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
                 >
-                  {healthMetrics.caloriesBurned}
+                  {derivedCalories}
                 </motion.p>
                 <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1 flex items-center">
                   <Zap className="h-3 w-3 mr-1" />
@@ -277,6 +329,7 @@ export function Dashboard() {
             </p>
           </motion.div>
 
+          {/* Active Minutes Widget */}
           <motion.div
             className="bg-white dark:bg-dark-card p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
             whileHover={{
@@ -297,7 +350,7 @@ export function Dashboard() {
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
                 >
-                  {healthMetrics.activeMinutes}
+                  {derivedActiveMinutes}
                 </motion.p>
                 <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center">
                   <TrendingUp className="h-3 w-3 mr-1" />
@@ -318,7 +371,6 @@ export function Dashboard() {
         </div>
       </motion.section>
 
-      {/* Today's Workout - Now using WorkoutContext data */}
       <motion.section
         className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
         variants={item}
@@ -363,7 +415,6 @@ export function Dashboard() {
 
                   <div className="grid grid-cols-3 gap-2">
                     {Array.from({ length: exercise.sets }).map((_, setIndex) => {
-                      // Convert exercise name to the property name for workoutLogs
                       const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
 
                       return (
@@ -395,7 +446,6 @@ export function Dashboard() {
                 </motion.div>
               ))}
 
-              {/* Skill Practice Checkbox */}
               <motion.div
                 className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-100 dark:border-gray-700"
                 initial={{ opacity: 0, x: -20 }}
@@ -415,7 +465,6 @@ export function Dashboard() {
                 </div>
               </motion.div>
 
-              {/* Notes Field */}
               <motion.div
                 className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-100 dark:border-gray-700"
                 initial={{ opacity: 0, x: -20 }}
@@ -447,7 +496,6 @@ export function Dashboard() {
         </div>
       </motion.section>
 
-      {/* Progress Charts - Using WorkoutContext data */}
       <motion.section
         className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
         variants={item}
@@ -490,19 +538,17 @@ export function Dashboard() {
                     }}
                   />
                   <Legend />
-                  {/* Dynamically create lines for each exercise type in the data */}
                   {progressChartData.length > 0 && Object.keys(progressChartData[0])
                     .filter(key => key !== 'week')
                     .map((key, index) => {
-                      // Generate a color based on index
                       const colors = [
-                        '#6366F1', // indigo
-                        '#8B5CF6', // violet
-                        '#EC4899', // pink
-                        '#10B981', // emerald
-                        '#F59E0B', // amber
-                        '#06B6D4', // cyan
-                        '#F97316', // orange
+                        '#6366F1',
+                        '#8B5CF6',
+                        '#EC4899',
+                        '#10B981',
+                        '#F59E0B',
+                        '#06B6D4',
+                        '#F97316',
                       ];
                       const color = colors[index % colors.length];
 
