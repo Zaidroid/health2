@@ -4,9 +4,10 @@ import { User } from '../types';
 
 interface AuthContextType {
   user: User | null;
-  signIn: (token: string) => Promise<void>;
+  signIn: (provider?: 'google') => Promise<void>; // Simplified signIn signature
   signOut: () => Promise<void>;
   loading: boolean;
+  guest: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,9 +24,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [guest, setGuest] = useState(false);
 
   useEffect(() => {
-    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setUser({
@@ -35,11 +36,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           googleToken: session.provider_token || '',
           trainingStartDate: new Date(session.user.user_metadata?.training_start_date || new Date()),
         });
+        setGuest(false);
       }
       setLoading(false);
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           googleToken: session.provider_token || '',
           trainingStartDate: new Date(session.user.user_metadata?.training_start_date || new Date()),
         });
+        setGuest(false);
       } else {
         setUser(null);
       }
@@ -60,38 +62,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (token: string) => {
+  const signIn = async (provider?: 'google') => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-          scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read',
-        },
-      },
-    });
+    try {
+      if (provider === 'google') {
+        // Regular Google Sign-In
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+              scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read',
+            },
+          },
+        });
 
-    if (error) {
+        if (error) {
+          throw error;
+        }
+        setGuest(false);
+      } else {
+        // Anonymous sign-in for guest
+        const { data, error } = await supabase.auth.signInAnonymously();
+
+        if (error) {
+          console.error("Guest sign-in error:", error);
+          throw error;
+        }
+
+        if (data && data.user) {
+          setUser({
+            id: data.user.id,
+            email: 'guest@example.com', // Use a consistent guest email
+            name: 'Guest User',
+            googleToken: '', // No token for guests
+            trainingStartDate: new Date(),
+          });
+          setGuest(true);
+        } else {
+          console.warn("Guest sign-in: No user data returned");
+          setLoading(false);
+        }
+      }
+    } catch (error) {
+      console.error("Sign-in error:", error);
+    } finally {
       setLoading(false);
-      throw error;
     }
   };
 
   const signOut = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signOut();
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        throw error;
+      }
+      setUser(null);
+      setGuest(false);
+    } catch (error) {
+      console.error("Sign-out error:", error);
+    } finally {
       setLoading(false);
-      throw error;
     }
-    setUser(null);
-    setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut, loading }}>
+    <AuthContext.Provider value={{ user, signIn, signOut, loading, guest }}>
       {children}
     </AuthContext.Provider>
   );

@@ -5,18 +5,18 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 export function Login() {
-  const { signIn, user, loading } = useAuth();
+  const { signIn, user, loading, guest } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) {
+    if (user || guest) {
       navigate('/');
     }
-  }, [user, navigate]);
+  }, [user, guest, navigate]);
 
   const handleGoogleSignIn = async () => {
     try {
-      await signIn('');
+      await signIn('google'); // Use the provider argument
     } catch (error) {
       console.error('Error signing in:', error);
     }
@@ -26,7 +26,7 @@ export function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <motion.div 
+      <motion.div
         className="sm:mx-auto sm:w-full sm:max-w-md"
         initial={{ opacity: 0, y: -50 }}
         animate={{ opacity: 1, y: 0 }}
@@ -34,11 +34,11 @@ export function Login() {
       >
         <div className="flex justify-center">
           <motion.div
-            animate={{ 
+            animate={{
               scale: [1, 1.2, 1],
               rotate: [0, 10, 0, -10, 0]
             }}
-            transition={{ 
+            transition={{
               duration: 3,
               repeat: Infinity,
               repeatType: "reverse"
@@ -47,7 +47,7 @@ export function Login() {
             <Activity className="h-16 w-16 text-indigo-600" />
           </motion.div>
         </div>
-        <motion.h2 
+        <motion.h2
           className="mt-6 text-center text-4xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 text-transparent bg-clip-text"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -55,7 +55,7 @@ export function Login() {
         >
           Welcome to Zaid Health
         </motion.h2>
-        <motion.p 
+        <motion.p
           className="mt-2 text-center text-lg text-gray-600"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -65,7 +65,7 @@ export function Login() {
         </motion.p>
       </motion.div>
 
-      <motion.div 
+      <motion.div
         className="mt-8 sm:mx-auto sm:w-full sm:max-w-md"
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
@@ -103,7 +103,7 @@ export function Login() {
                 Sign in with Google
               </motion.button>
             </div>
-            
+
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -113,13 +113,16 @@ export function Login() {
                   <span className="px-2 bg-white text-gray-500">Or continue as guest</span>
                 </div>
               </div>
-              
+
               <div className="mt-6">
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
-                  onClick={() => navigate('/')}
+                  onClick={() => {
+                    signIn(); // Call signIn without arguments for guest
+                    navigate('/');
+                  }}
                 >
                   Continue without signing in
                 </motion.button>
