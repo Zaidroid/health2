@@ -14,11 +14,11 @@ export const ThemeToggle = () => {
   ];
 
   const colorOptions = [
-    { value: 'indigo', label: 'Indigo', class: 'bg-indigo-500' },
-    { value: 'blue', label: 'Blue', class: 'bg-blue-500' },
-    { value: 'purple', label: 'Purple', class: 'bg-purple-500' },
-    { value: 'teal', label: 'Teal', class: 'bg-teal-500' },
-    { value: 'emerald', label: 'Emerald', class: 'bg-emerald-500' },
+    { value: 'indigo', label: 'Indigo', bgClass: 'bg-indigo-500' },
+    { value: 'blue', label: 'Blue', bgClass: 'bg-blue-500' },
+    { value: 'purple', label: 'Purple', bgClass: 'bg-purple-500' },
+    { value: 'teal', label: 'Teal', bgClass: 'bg-teal-500' },
+    { value: 'emerald', label: 'Emerald', bgClass: 'bg-emerald-500' },
   ];
 
   return (
@@ -93,9 +93,11 @@ export const ThemeToggle = () => {
                     whileTap={{ scale: 0.9 }}
                     onClick={() => {
                       setThemeColor(color.value as any);
+                      // Optional: close menu after selecting color
+                      // setIsOpen(false);
                     }}
-                    className={`w-8 h-8 rounded-full ${color.class} ${
-                      themeColor === color.value ? 'ring-2 ring-offset-2 dark:ring-offset-gray-800' : ''
+                    className={`w-8 h-8 rounded-full ${color.bgClass} ${
+                      themeColor === color.value ? 'ring-2 ring-offset-2 dark:ring-offset-gray-800 ring-gray-400' : ''
                     }`}
                     title={color.label}
                     aria-label={`Set color theme to ${color.label}`}
