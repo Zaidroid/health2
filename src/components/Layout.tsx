@@ -4,12 +4,14 @@ import { Activity, Calendar as CalendarIcon, LogOut, Menu, X, Home, User, Trendi
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
+import { useTheme } from '../context/ThemeContext';
 
 export function Layout() {
   const { user, signOut, loading, guest } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     console.log("Layout useEffect: user =", user, "guest =", guest, "loading =", loading, "pathname =", location.pathname);
@@ -46,12 +48,12 @@ export function Layout() {
                     whileHover={{ rotate: 360 }}
                     transition={{ duration: 0.5 }}
                   >
-                    <Activity className="h-8 w-8 text-indigo-600 dark:text-dark-primary" />
+                    <Activity className="h-8 w-8 text-primary-600 dark:text-primary-500" />
                   </motion.div>
                   <motion.span
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="ml-2 text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 text-transparent bg-clip-text"
+                    className="ml-2 text-xl font-bold heading-gradient"
                   >
                     Zaid Health
                   </motion.span>
@@ -66,8 +68,8 @@ export function Layout() {
                     to={item.path}
                     className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                       location.pathname === item.path
-                        ? 'text-indigo-600 dark:text-white bg-indigo-50 dark:bg-indigo-600'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-white hover:bg-indigo-50 dark:hover:bg-indigo-500'
+                        ? 'text-primary-600 dark:text-white bg-primary-50 dark:bg-primary-600'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-white hover:bg-primary-50 dark:hover:bg-primary-500'
                     }`}
                   >
                     <motion.div
@@ -98,10 +100,10 @@ export function Layout() {
                 ) : (
                 <motion.div
                   whileHover={{ scale: 1.05 }}
-                  className="flex items-center bg-indigo-50 dark:bg-gray-700 px-3 py-2 rounded-full"
+                  className="flex items-center bg-primary-50 dark:bg-gray-700 px-3 py-2 rounded-full"
                 >
-                  <User className="h-5 w-5 text-indigo-600 dark:text-gray-400 mr-2" />
-                  <span className="text-sm font-medium text-indigo-700 dark:text-gray-200">{user?.name}</span>
+                  <User className="h-5 w-5 text-primary-600 dark:text-gray-400 mr-2" />
+                  <span className="text-sm font-medium text-primary-700 dark:text-gray-200">{user?.name}</span>
                 </motion.div>
                 )}
 
@@ -109,7 +111,7 @@ export function Layout() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={signOut}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all duration-200"
+                  className="btn-primary px-4 py-2 text-sm font-medium rounded-md shadow-sm"
                 >
                   <LogOut className="h-4 w-4 mr-2" />
                   Sign Out
@@ -125,7 +127,7 @@ export function Layout() {
               <div className="flex md:hidden ml-2">
                 <button
                   onClick={toggleMobileMenu}
-                  className="inline-flex items-center justify-center p-2 rounded-md text-indigo-600 dark:text-dark-primary"
+                  className="inline-flex items-center justify-center p-2 rounded-md text-primary-600 dark:text-primary-500"
                 >
                   {mobileMenuOpen ? (
                     <X className="h-6 w-6" />
@@ -153,8 +155,8 @@ export function Layout() {
                     to={item.path}
                     className={`block px-3 py-2 rounded-md text-base font-medium ${
                       location.pathname === item.path
-                        ? 'text-indigo-600 dark:text-white bg-indigo-50 dark:bg-indigo-600'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-white hover:bg-indigo-50 dark:hover:bg-indigo-500'
+                        ? 'text-primary-600 dark:text-white bg-primary-50 dark:bg-primary-600'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-white hover:bg-primary-50 dark:hover:bg-primary-500'
                     }`}
                     onClick={() => setMobileMenuOpen(false)}
                   >
@@ -173,9 +175,9 @@ export function Layout() {
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Guest User</span>
                       </div>
                     ) : (
-                  <div className="flex items-center px-3 py-2 rounded-full bg-indigo-50 dark:bg-gray-700">
-                    <User className="h-5 w-5 text-indigo-600 dark:text-dark-primary mr-2" />
-                    <span className="text-sm font-medium text-indigo-700 dark:text-dark-text">{user?.name}</span>
+                  <div className="flex items-center px-3 py-2 rounded-full bg-primary-50 dark:bg-gray-700">
+                    <User className="h-5 w-5 text-primary-600 dark:text-primary-500 mr-2" />
+                    <span className="text-sm font-medium text-primary-700 dark:text-dark-text">{user?.name}</span>
                   </div>
                     )}
                   <button
