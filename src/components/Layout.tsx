@@ -4,7 +4,6 @@ import { Activity, Calendar as CalendarIcon, LogOut, Menu, X, Home, User, Trendi
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
-import './global.css';
 
 export function Layout() {
   const { user, signOut, loading, guest } = useAuth();
