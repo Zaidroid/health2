@@ -11,7 +11,7 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme, themeColor } = useTheme();
 
   useEffect(() => {
     console.log("Layout useEffect: user =", user, "guest =", guest, "loading =", loading, "pathname =", location.pathname);
@@ -53,7 +53,7 @@ export function Layout() {
                   <motion.span
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="ml-2 text-xl font-bold heading-gradient"
+                    className="ml-2 text-xl font-bold accent-text"
                   >
                     Zaid Health
                   </motion.span>
