@@ -319,4 +319,210 @@ export function WorkoutProgress() {
                   id="skillPractice"
                   checked={currentWeekData.skillPractice === true}
                   onChange={(e) => updateProgressEntryLocal('skillPractice', e.target.checked)}
-                  className="h-4 w-4
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="skillPractice" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                  Completed Skill Practice
+                </label>
+              </motion.div>
+
+              <motion.div
+                className="bg-gradient-to-br from-indigo-50 to-white dark:from-gray-700 dark:to-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-gray-700"
+                whileHover={{ y: -3, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
+              >
+                <div className="flex items-center mb-2">
+                  <ClipboardList className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
+                  <h3 className="font-medium text-gray-700 dark:text-gray-300">Notes</h3>
+                </div>
+                <textarea
+                  value={currentWeekData.notes || ''}
+                  onChange={(e) => updateProgressEntryLocal('notes', e.target.value)}
+                  className="w-full rounded-md border-indigo-200 dark:border-gray-600 shadow-sm focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:ring-opacity-50 dark:bg-gray-700 dark:text-white"
+                  rows={3}
+                  placeholder="Add notes about your progress..."
+                />
+              </motion.div>
+            </div>
+
+            <div className="space-y-6">
+              <AnimatedCard className="p-4 overflow-hidden">
+                <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+                  <Calendar className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" />
+                  Weekly Target (Week {currentWeek})
+                </h3>
+                <div className="bg-indigo-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
+                  {Object.entries(progressionPlan).map(([weekRange, targets], index) => {
+                    const weekNumbers = weekRange.split("-").map(Number);
+                    const isCurrentPlan = currentWeek >= weekNumbers[0] && currentWeek <= (weekNumbers[1] || weekNumbers[0]);
+
+                    return isCurrentPlan && (
+                      <div key={index} className="space-y-2">
+                        <h4 className="font-medium text-indigo-700 dark:text-indigo-300">Week {weekRange}</h4>
+                        <ul className="space-y-1 mt-2">
+                          {Object.entries(targets).map(([exercise, target], idx) => (
+                            <li key={idx} className="flex items-start">
+                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2" />
+                              <span className="text-sm text-gray-700 dark:text-gray-300">{exercise}: {target}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+                  <Award className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" />
+                  Your Progress Chart
+                </h3>
+                <div className="w-full h-60">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="week" stroke="#6366F1" label={{ value: 'Week', position: 'insideBottom', offset: -5 }} />
+                      <YAxis stroke="#6366F1" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'white',
+                          borderRadius: '8px',
+                          border: '1px solid #E0E7FF',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }}
+                      />
+                      <Legend />
+                      {chartData.length > 0 && Object.keys(chartData[0])
+                        .filter(key => key !== 'week')
+                        .map((key, index) => {
+                          const colors = [
+                            '#6366F1', // indigo
+                            '#8B5CF6', // violet
+                            '#EC4899', // pink
+                            '#10B981', // emerald
+                            '#F59E0B', // amber
+                            '#06B6D4', // cyan
+                            '#F97316', // orange
+                          ];
+                          const color = colors[index % colors.length];
+                          return (
+                            <Line
+                              key={key}
+                              type="monotone"
+                              dataKey={key}
+                              stroke={color}
+                              strokeWidth={2}
+                              name={key.charAt(0).toUpperCase() + key.slice(1)}
+                              dot={{ stroke: color, strokeWidth: 2, r: 4, fill: 'white' }}
+                            />
+                          );
+                        })}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </AnimatedCard>
+            </div>
+          </div>
+
+          <motion.button
+            onClick={saveProgress}
+            disabled={loading}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`${loading
+                ? 'bg-indigo-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
+              } w-full mt-6 px-4 py-3 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-md transition-all duration-200`}
+          >
+            {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'success' ? 'Saved!' : 'Save Progress'}
+          </motion.button>
+          {saveMessage && (
+            <p
+              className={`mt-2 text-sm ${saveStatus === 'error' ? 'text-red-600' : 'text-green-600'
+                }`}
+            >
+              {saveMessage}
+            </p>
+          )}
+        </div>
+      </motion.section>
+
+      <motion.section
+        className="bg-white dark:bg-dark-card rounded-xl shadow-sm overflow-hidden border border-indigo-100 dark:border-gray-700"
+        variants={item}
+      >
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
+          <h2 className="text-xl font-semibold text-white">Weekly Training Schedule</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {trainingSchedule && trainingSchedule.map((day, index) => (
+              <motion.div
+                key={index}
+                className="border border-indigo-100 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800 shadow-sm"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ y: -5, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.1)" }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200">{day.day}</h3>
+                  <span className="text-sm text-indigo-600 dark:text-indigo-400 font-medium px-3 py-1 bg-indigo-50 dark:bg-gray-700 rounded-full">
+                    {/* Optional: Add focus property to daily workout if needed */}
+                  </span>
+                </div>
+
+                {day.exercises.length > 0 ? (
+                  <ul className="space-y-2 mt-3">
+                    {day.exercises.map((exercise, idx) => (
+                      <li key={idx} className="text-gray-700 dark:text-gray-300 text-sm flex items-center">
+                        <Dumbbell className="h-4 w-4 text-indigo-500 mr-2" />
+                        <span>{exercise.name}: {exercise.sets} sets × {exercise.targetReps}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-600 dark:text-gray-400 italic text-sm mt-2">Rest day</p>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </motion.section>
+
+      <motion.section
+        className="bg-white dark:bg-dark-card rounded-xl shadow-sm overflow-hidden border border-indigo-100 dark:border-gray-700"
+        variants={item}
+      >
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
+          <h2 className="text-xl font-semibold text-white">Nutrition Plan</h2>
+        </div>
+        <div className="p-6">
+          <div className="bg-indigo-50 dark:bg-gray-800 rounded-xl p-5 mb-6">
+            <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-3">Daily Meal Plan (Budget-Friendly &amp; High Protein)</h3>
+            <ul className="space-y-3">
+              <li className="flex items-center text-gray-700 dark:text-gray-300">
+                <span className="font-medium mr-2">Breakfast:</span> 4 boiled eggs + oats with peanut butter
+              </li>
+              <li className="flex items-center text-gray-700 dark:text-gray-300">
+                <span className="font-medium mr-2">Lunch:</span> Rice with lentils/chicken + vegetables
+              </li>
+              <li className="flex items-center text-gray-700 dark:text-gray-300">
+                <span className="font-medium mr-2">Snack:</span> Peanut butter sandwich or yogurt with nuts
+              </li>
+              <li className="flex items-center text-gray-700 dark:text-gray-300">
+                <span className="font-medium mr-2">Dinner:</span> Tuna or eggs with whole wheat bread
+              </li>
+              <li className="flex items-center text-gray-700 dark:text-gray-300">
+                <span className="font-medium mr-2">Post-Workout:</span> Protein shake (if available) or milk with honey
+              </li>
+            </ul>
+
+            <div className="mt-4 pt-4 border-t border-indigo-100 dark:border-gray-700">
+              <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-1">Creatine Usage:</h4>
+              <p className="text-gray-700 dark:text-gray-300">Take 3-5g daily with plenty of water.</p>
+            </div>
+          </div>
+        </div>
+      </motion.section>
+    </motion.div>
+  );
+}
