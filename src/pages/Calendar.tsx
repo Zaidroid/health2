@@ -12,7 +12,7 @@ interface WorkoutData {
     completionPercentage: number;
     achievements?: string[];
     notes?: string;
-    reps: { [exercise: string]: number }; // Added to store reps
+    reps: { [exercise: string]: number };
   };
 }
 
@@ -74,12 +74,11 @@ export function Calendar() {
       reps: {},
     };
 
-    // Populate reps and calculate completion
     let completedExercises = 0;
     dailyWorkout.exercises.forEach(exercise => {
       const repValue = weekProgress?.[exercise.name];
       workoutDisplay.reps[exercise.name] = typeof repValue === 'number' ? repValue : 0;
-      if (repValue > 0) { // Consider an exercise completed if reps > 0
+      if (repValue > 0) {
         completedExercises++;
       }
     });
@@ -93,7 +92,7 @@ export function Calendar() {
 
   const handleEditChange = (exercise: string, value: string) => {
     setEditData(prev => {
-      const newData = prev || { reps: {}, notes: getWorkoutForDate(selectedDate!)?.notes || '' };
+      const newData = prev || { reps: { ...getWorkoutForDate(selectedDate!)?.reps }, notes: getWorkoutForDate(selectedDate!)?.notes || '' };
       newData.reps[exercise] = parseInt(value, 10) || 0;
       return { ...newData };
     });
@@ -101,29 +100,35 @@ export function Calendar() {
 
   const handleNotesChange = (value: string) => {
     setEditData(prev => {
-      const newData = prev || { reps: getWorkoutForDate(selectedDate!)?.reps || {}, notes: '' };
+      const newData = prev || { reps: { ...getWorkoutForDate(selectedDate!)?.reps }, notes: '' };
       return { ...newData, notes: value };
     });
   };
 
   const saveEdits = () => {
-    if (!selectedDate || !editData) return;
+    if (!selectedDate || !user) return;
 
     const workout = getWorkoutForDate(selectedDate);
     if (!workout) return;
 
+    // Use editData if available, otherwise use original workout data
+    const repsToSave = editData?.reps || workout.reps;
+    const notesToSave = editData?.notes !== undefined ? editData.notes : workout.notes;
+
     // Save reps for each exercise
-    Object.entries(editData.reps).forEach(([exercise, reps]) => {
+    Object.entries(repsToSave).forEach(([exercise, reps]) => {
       updateProgressEntry(currentWeek, exercise, reps);
     });
 
-    // Save notes
-    if (editData.notes !== workout.notes) {
-      updateProgressEntry(currentWeek, 'notes', editData.notes);
+    // Save notes if changed
+    if (notesToSave !== (weekProgress?.notes || '')) {
+      updateProgressEntry(currentWeek, 'notes', notesToSave);
     }
 
-    setEditData(null); // Clear edit mode
+    setEditData(null); // Reset edit state after saving
   };
+
+  const weekProgress = progressData.find(entry => entry.week === currentWeek);
 
   const variants = {
     enter: (direction: number) => ({
@@ -357,16 +362,14 @@ export function Calendar() {
                             </span>
                           </div>
                         </div>
-                        {editData && (
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={saveEdits}
-                            className="mt-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-md transition-all duration-200"
-                          >
-                            Save Changes
-                          </motion.button>
-                        )}
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={saveEdits}
+                          className="mt-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-md transition-all duration-200"
+                        >
+                          Save Changes
+                        </motion.button>
                       </>
                     );
                   })()
