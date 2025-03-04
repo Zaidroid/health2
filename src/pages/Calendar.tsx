@@ -1,19 +1,18 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMonth, addMonths, subMonths, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, Dumbbell, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkout } from '../context/WorkoutContext';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 interface WorkoutData {
-  [date: string]: {
-    completed: boolean;
-    exercises: string[];
-    completionPercentage: number;
-    achievements?: string[];
-    notes?: string;
-    reps: { [exercise: string]: number };
-  };
+  completed: boolean;
+  exercises: string[];
+  completionPercentage: number;
+  achievements?: string[];
+  notes?: string;
+  reps: { [exercise: string]: number[] };
 }
 
 export function Calendar() {
@@ -24,8 +23,7 @@ export function Calendar() {
   const { user } = useAuth();
   const selectedPlan = user?.selectedPlan || "Z Axis";
 
-  // Local state for editing
-  const [editData, setEditData] = useState<{ reps: { [exercise: string]: number }; notes: string } | null>(null);
+  const [editData, setEditData] = useState<{ reps: { [exercise: string]: number[] }; notes: string } | null>(null);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -45,90 +43,109 @@ export function Calendar() {
     setEditData(null);
   };
 
-  const getWorkoutForDate = (date: Date) => {
+  useEffect(() => {
+    if (selectedDate) {
+      const workout = getWorkoutForDate(selectedDate);
+      const initialReps = workout?.reps || {};
+      setEditData({
+        reps: Object.fromEntries(
+          trainingSchedules[selectedPlan][currentWeek]
+            .find((w) => w.day === format(selectedDate, 'EEEE'))
+            ?.exercises.map((ex) => [ex.name, initialReps[ex.name] || Array(ex.sets).fill(0)]) || []
+        ),
+        notes: workout?.notes || '',
+      });
+    }
+  }, [selectedDate]);
+
+  const getWorkoutForDate = (date: Date): WorkoutData | null => {
     const dayOfWeek = format(date, 'EEEE');
-
-    if (!trainingSchedules || !trainingSchedules[selectedPlan]) {
-      console.error(`Training schedule not found for plan: ${selectedPlan}`);
-      return null;
-    }
-
-    const weekSchedule = trainingSchedules[selectedPlan][currentWeek];
-    if (!weekSchedule) {
-      console.error(`No schedule found for week ${currentWeek} in plan ${selectedPlan}`);
-      return null;
-    }
+    const weekSchedule = trainingSchedules[selectedPlan]?.[currentWeek];
+    if (!weekSchedule) return null;
 
     const dailyWorkout = weekSchedule.find((workout) => workout.day === dayOfWeek);
-    if (!dailyWorkout) {
-      return null;
-    }
+    if (!dailyWorkout) return null;
 
-    const weekProgress = progressData.find(entry => entry.week === currentWeek);
-    const workoutDisplay: WorkoutData[string] = {
+    const dayProgress = progressData.find(
+      (entry) => entry.week === currentWeek && entry.day === dayOfWeek
+    );
+
+    const workoutDisplay: WorkoutData = {
       completed: false,
-      exercises: dailyWorkout.exercises.map(ex => ex.name),
+      exercises: dailyWorkout.exercises.map((ex) => ex.name),
       completionPercentage: 0,
       achievements: [],
-      notes: weekProgress?.notes || '',
+      notes: dayProgress?.notes || '',
       reps: {},
     };
 
     let completedExercises = 0;
-    dailyWorkout.exercises.forEach(exercise => {
-      const repValue = weekProgress?.[exercise.name];
-      workoutDisplay.reps[exercise.name] = typeof repValue === 'number' ? repValue : 0;
-      if (repValue > 0) {
-        completedExercises++;
-      }
+    dailyWorkout.exercises.forEach((exercise) => {
+      const repValue = dayProgress?.reps?.[exercise.name] || Array(exercise.sets).fill(0);
+      workoutDisplay.reps[exercise.name] = repValue;
+      if (repValue.some((rep: number) => rep > 0)) completedExercises++;
     });
-    workoutDisplay.completionPercentage = dailyWorkout.exercises.length > 0
-      ? (completedExercises / dailyWorkout.exercises.length) * 100
-      : 0;
+
+    workoutDisplay.completionPercentage =
+      dailyWorkout.exercises.length > 0
+        ? (completedExercises / dailyWorkout.exercises.length) * 100
+        : 0;
     workoutDisplay.completed = workoutDisplay.completionPercentage === 100;
 
     return workoutDisplay;
   };
 
-  const handleEditChange = (exercise: string, value: string) => {
-    setEditData(prev => {
-      const newData = prev || { reps: { ...getWorkoutForDate(selectedDate!)?.reps }, notes: getWorkoutForDate(selectedDate!)?.notes || '' };
-      newData.reps[exercise] = parseInt(value, 10) || 0;
+  const handleEditChange = (exercise: string, setIndex: number, value: string) => {
+    setEditData((prev) => {
+      const newData = prev || { reps: {}, notes: '' };
+      if (!newData.reps[exercise]) newData.reps[exercise] = [];
+      newData.reps[exercise][setIndex] = parseInt(value, 10) || 0;
       return { ...newData };
     });
   };
 
   const handleNotesChange = (value: string) => {
-    setEditData(prev => {
-      const newData = prev || { reps: { ...getWorkoutForDate(selectedDate!)?.reps }, notes: '' };
+    setEditData((prev) => {
+      const newData = prev || { reps: {}, notes: '' };
       return { ...newData, notes: value };
     });
   };
 
-  const saveEdits = () => {
-    if (!selectedDate || !user) return;
+  const saveEdits = async () => {
+    if (!selectedDate || !user) {
+      toast.error('Please sign in to save your workout data.');
+      console.log('No user or selected date:', { user, selectedDate });
+      return;
+    }
 
     const workout = getWorkoutForDate(selectedDate);
-    if (!workout) return;
+    if (!workout) {
+      toast.error('No workout scheduled for this day.');
+      return;
+    }
 
-    // Use editData if available, otherwise use original workout data
+    const dayOfWeek = format(selectedDate, 'EEEE');
     const repsToSave = editData?.reps || workout.reps;
     const notesToSave = editData?.notes !== undefined ? editData.notes : workout.notes;
 
-    // Save reps for each exercise
-    Object.entries(repsToSave).forEach(([exercise, reps]) => {
-      updateProgressEntry(currentWeek, exercise, reps);
-    });
+    try {
+      // Save reps for each exercise
+      for (const [exercise, reps] of Object.entries(repsToSave)) {
+        await updateProgressEntry(currentWeek, dayOfWeek, exercise, reps);
+        console.log(`Saved reps for ${exercise}:`, reps);
+      }
 
-    // Save notes if changed
-    if (notesToSave !== (weekProgress?.notes || '')) {
-      updateProgressEntry(currentWeek, 'notes', notesToSave);
+      // Save notes
+      await updateProgressEntry(currentWeek, dayOfWeek, 'notes', notesToSave);
+      console.log('Saved notes:', notesToSave);
+
+      toast.success('Workout saved successfully!');
+      setEditData(null); // Reset edit state
+    } catch (error) {
+      console.error('Error saving edits:', error);
+      toast.error('Failed to save workout. Please try again.');
     }
-
-    setEditData(null); // Reset edit state after saving
   };
-
-  const weekProgress = progressData.find(entry => entry.week === currentWeek);
 
   const variants = {
     enter: (direction: number) => ({
@@ -151,13 +168,13 @@ export function Calendar() {
     let totalCompletionPercentage = 0;
     let completedWorkouts = 0;
 
-    days.forEach(day => {
+    days.forEach((day) => {
       const workout = getWorkoutForDate(day);
       if (workout) {
         totalWorkouts++;
         totalCompletionPercentage += workout.completionPercentage;
         if (workout.completed) completedWorkouts++;
-        workout.exercises.forEach(exercise => {
+        workout.exercises.forEach((exercise) => {
           workoutTypes[exercise] = (workoutTypes[exercise] || 0) + 1;
         });
       }
@@ -170,15 +187,16 @@ export function Calendar() {
       totalWorkouts,
       averageCompletionPercentage,
       mostFrequentWorkout,
-      completedWorkouts
+      completedWorkouts,
     };
   }, [currentDate, days, trainingSchedules, currentWeek, progressData, selectedPlan]);
 
-  const getDayColor = (workout: ReturnType<typeof getWorkoutForDate>) => {
-    if (!workout) return 'gray';
-    if (workout.completionPercentage > 75) return 'green';
-    if (workout.completionPercentage >= 25) return 'yellow';
-    return 'red';
+  const getDayColor = (date: Date) => {
+    const workout = getWorkoutForDate(date);
+    if (!workout) return 'bg-gray-200';
+    if (workout.completed) return 'bg-green-500';
+    if (workout.completionPercentage > 0) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
 
   return (
@@ -222,7 +240,7 @@ export function Calendar() {
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ type: "tween", duration: 0.3 }}
+              transition={{ type: 'tween', duration: 0.3 }}
             >
               <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">
                 {format(currentDate, 'MMMM yyyy')}
@@ -240,7 +258,7 @@ export function Calendar() {
                 {days.map((day) => {
                   const workout = getWorkoutForDate(day);
                   const isSelected = selectedDate && isSameDay(day, selectedDate);
-                  const dayColor = getDayColor(workout);
+                  const dayColor = getDayColor(day);
 
                   return (
                     <motion.div
@@ -260,10 +278,7 @@ export function Calendar() {
                         className={`
                           block text-sm mb-1 w-6 h-6 rounded-full flex items-center justify-center mx-auto
                           ${isToday(day) ? 'text-white bg-indigo-600 dark:bg-indigo-400' : ''}
-                          ${!isToday(day) && dayColor === 'green' ? 'bg-green-500 text-white' : ''}
-                          ${!isToday(day) && dayColor === 'yellow' ? 'bg-yellow-500 text-white' : ''}
-                          ${!isToday(day) && dayColor === 'red' ? 'bg-red-500 text-white' : ''}
-                          ${!isToday(day) && dayColor === 'gray' ? 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300' : ''}
+                          ${!isToday(day) ? dayColor : ''}
                         `}
                       >
                         {format(day, 'd')}
@@ -316,20 +331,25 @@ export function Calendar() {
                       <>
                         <div className="mb-4">
                           <h5 className="font-medium text-gray-700 dark:text-gray-300">Scheduled Workout:</h5>
-                          <ul className="list-disc list-inside text-gray-600 dark:text-gray-400">
-                            {workout.exercises.map((exercise, index) => (
-                              <li key={index} className="flex items-center justify-between">
-                                <span>{exercise}</span>
-                                <input
-                                  type="number"
-                                  value={displayReps[exercise] || ''}
-                                  onChange={(e) => handleEditChange(exercise, e.target.value)}
-                                  className="w-16 ml-2 px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                  placeholder="Reps"
-                                />
-                              </li>
+                          {trainingSchedules[selectedPlan][currentWeek]
+                            .find((w) => w.day === format(selectedDate, 'EEEE'))
+                            ?.exercises.map((exercise, index) => (
+                              <div key={index} className="mb-4">
+                                <h6 className="font-medium">{exercise.name}</h6>
+                                <div className="flex space-x-2">
+                                  {Array.from({ length: exercise.sets }).map((_, setIndex) => (
+                                    <input
+                                      key={setIndex}
+                                      type="number"
+                                      value={displayReps[exercise.name]?.[setIndex] || ''}
+                                      onChange={(e) => handleEditChange(exercise.name, setIndex, e.target.value)}
+                                      className="w-16 px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                      placeholder={`Set ${setIndex + 1}`}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
                             ))}
-                          </ul>
                         </div>
                         {workout.achievements && workout.achievements.length > 0 && (
                           <div className="mb-4">
@@ -355,11 +375,11 @@ export function Calendar() {
                           <h5 className="font-medium text-gray-700 dark:text-gray-300">Completion:</h5>
                           <div className="flex items-center">
                             {workout.completionPercentage > 75 && <CheckCircle className="text-green-500 mr-2" />}
-                            {workout.completionPercentage >= 25 && workout.completionPercentage <= 75 && <AlertTriangle className="text-yellow-500 mr-2" />}
+                            {workout.completionPercentage >= 25 && workout.completionPercentage <= 75 && (
+                              <AlertTriangle className="text-yellow-500 mr-2" />
+                            )}
                             {workout.completionPercentage < 25 && <XCircle className="text-red-500 mr-2" />}
-                            <span className="text-gray-600 dark:text-gray-400">
-                              {workout.completionPercentage}%
-                            </span>
+                            <span className="text-gray-600 dark:text-gray-400">{workout.completionPercentage}%</span>
                           </div>
                         </div>
                         <motion.button
