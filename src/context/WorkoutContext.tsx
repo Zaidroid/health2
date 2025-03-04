@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -577,80 +577,94 @@ export const WorkoutProvider = ({ children }: WorkoutProviderProps) => {
   const [progressData, setProgressData] = useState<UserProgressEntry[]>([]);
   const { user } = useAuth();
 
-  const updateProgressEntry = async (
-    week: number,
-    exerciseName: string,
-    value: number | boolean | string,
-  ) => {
-    // *** CRITICAL: Log all inputs to updateProgressEntry ***
-    console.log("updateProgressEntry - week:", week, "exerciseName:", exerciseName, "value:", value);
+  // Fetch progress data from Supabase on initialization
+  useEffect(() => {
+    const fetchProgress = async () => {
+      if (!user) return;
+      try {
+        const { data, error } = await supabase
+          .from('user_progress')
+          .select('week, exercise_name, max_value, skill_practice, notes')
+          .eq('user_id', user.id);
 
+        if (error) throw error;
+
+        // Transform Supabase data into UserProgressEntry format
+        const transformedData: UserProgressEntry[] = [];
+        data.forEach(item => {
+          const weekEntry = transformedData.find(e => e.week === item.week) || { week: item.week };
+          if (item.exercise_name === 'skillPractice') {
+            weekEntry[item.exercise_name] = item.skill_practice ?? false;
+          } else if (item.exercise_name === 'notes') {
+            weekEntry[item.exercise_name] = item.notes ?? '';
+          } else {
+            weekEntry[item.exercise_name] = item.max_value ?? 0;
+          }
+          if (!transformedData.some(e => e.week === item.week)) {
+            transformedData.push(weekEntry);
+          }
+        });
+        setProgressData(transformedData);
+      } catch (error) {
+        console.error('Error fetching progress:', error);
+      }
+    };
+    fetchProgress();
+  }, [user]);
+
+  const updateProgressEntry = async (week: number, exerciseName: string, value: number | boolean | string) => {
     if (!user) {
       console.error("No user logged in.");
       return;
     }
 
-    setProgressData((prevProgress) => {
-      const weekIndex = prevProgress.findIndex((entry) => entry.week === week);
+    // Update local progressData
+    const updatedProgress = [...progressData];
+    const weekIndex = updatedProgress.findIndex(entry => entry.week === week);
+    const newEntry = weekIndex > -1 ? { ...updatedProgress[weekIndex] } : { week };
 
-      if (weekIndex > -1) {
-        const updatedWeek = { ...prevProgress[weekIndex], [exerciseName]: value };
-        const updatedProgress = [...prevProgress];
-        updatedProgress[weekIndex] = updatedWeek;
-        console.log("Updated progressData:", updatedProgress);
-        return updatedProgress;
-      } else {
-        const newWeekEntry: UserProgressEntry = { week, [exerciseName]: value };
-        const updatedProgress = [...prevProgress, newWeekEntry];
-        console.log("Updated progressData:", updatedProgress);
-        return updatedProgress;
-      }
-    });
+    newEntry[exerciseName] = value;
+    if (weekIndex > -1) {
+      updatedProgress[weekIndex] = newEntry;
+    } else {
+      updatedProgress.push(newEntry);
+    }
+    setProgressData(updatedProgress);
+
+    // Save to Supabase with proper type handling
+    const isSkillPractice = exerciseName === 'skillPractice';
+    const isNotes = exerciseName === 'notes';
+    const upsertData = {
+      user_id: user.id,
+      week,
+      exercise_name: exerciseName,
+      max_value: !isSkillPractice && !isNotes ? (typeof value === 'number' ? value : null) : null,
+      skill_practice: isSkillPractice ? (typeof value === 'boolean' ? value : null) : null,
+      notes: isNotes ? (typeof value === 'string' ? value : null) : null,
+    };
 
     try {
-      // *** CRITICAL: Log the data being sent to Supabase ***
-      console.log("Upserting data:", {
-        user_id: user.id,
-        week,
-        exercise_name: exerciseName,
-        max_value: value, // Ensure this is a number
-        skill_practice: false, // Default, will be updated separately
-        notes: '', // Default, will be updated separately
-      });
-
-      const { error, data } = await supabase
+      const { error } = await supabase
         .from('user_progress')
-        .upsert(
-          [
-            {
-              user_id: user.id,
-              week,
-              exercise_name: exerciseName,
-              max_value: value, // Correctly using the 'value' parameter
-              skill_practice: false, // Default values, handled separately
-              notes: '',
-            },
-          ],
-          { onConflict: 'user_id, week, exercise_name' },
-        );
+        .upsert([upsertData], { onConflict: 'user_id, week, exercise_name' });
 
       if (error) {
         console.error('Error updating progress:', error);
       } else {
-        console.log('Progress updated successfully:', data);
+        console.log('Progress updated successfully for', exerciseName);
       }
     } catch (err) {
-      console.error('An unexpected error occurred:', err);
+      console.error('Unexpected error updating progress:', err);
     }
   };
 
   const getPlannedWorkout = (planName: string) => {
     const selectedSchedule = planName === "Z Axis" ? zAxisTrainingSchedule : tBoneTrainingSchedule;
-      return selectedSchedule[currentWeek]?.find(
-        (dailyWorkout) =>
-          dailyWorkout.day ===
-          new Date().toLocaleDateString('en-US', { weekday: 'long' }),
-      );
+    return selectedSchedule[currentWeek]?.find(
+      (dailyWorkout) =>
+        dailyWorkout.day ===
+        new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+    );
   };
 
   const contextValue: WorkoutContextType = {
