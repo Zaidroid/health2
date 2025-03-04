@@ -43,20 +43,31 @@ export function Calendar() {
     setEditData(null);
   };
 
-  useEffect(() => {
+    useEffect(() => {
     if (selectedDate) {
       const workout = getWorkoutForDate(selectedDate);
       const initialReps = workout?.reps || {};
+
+      // Get the daily workout definition
+      const dailyWorkout = trainingSchedules[selectedPlan]?.[currentWeek]?.find(
+        (w) => w.day === format(selectedDate, 'EEEE')
+      );
+
+      // Initialize reps based on the workout definition, if available
+      const repsEntries = dailyWorkout?.exercises
+        ? dailyWorkout.exercises.map((ex) => [
+            ex.name,
+            initialReps[ex.name] || Array(ex.sets).fill(0),
+          ])
+        : [];
+
       setEditData({
-        reps: Object.fromEntries(
-          trainingSchedules[selectedPlan][currentWeek]
-            .find((w) => w.day === format(selectedDate, 'EEEE'))
-            ?.exercises.map((ex) => [ex.name, initialReps[ex.name] || Array(ex.sets).fill(0)]) || []
-        ),
+        reps: Object.fromEntries(repsEntries),
         notes: workout?.notes || '',
       });
     }
-  }, [selectedDate]);
+  }, [selectedDate, trainingSchedules, selectedPlan, currentWeek, progressData]);
+
 
   const getWorkoutForDate = (date: Date): WorkoutData | null => {
     const dayOfWeek = format(date, 'EEEE');
@@ -112,6 +123,7 @@ export function Calendar() {
   };
 
   const saveEdits = async () => {
+    console.log("saveEdits called"); // Debug log
     if (!selectedDate || !user) {
       toast.error('Please sign in to save your workout data.');
       console.log('No user or selected date:', { user, selectedDate });
@@ -127,17 +139,18 @@ export function Calendar() {
     const dayOfWeek = format(selectedDate, 'EEEE');
     const repsToSave = editData?.reps || workout.reps;
     const notesToSave = editData?.notes !== undefined ? editData.notes : workout.notes;
+    console.log("Data to save:", { repsToSave, notesToSave, dayOfWeek, currentWeek }); // Debug log
 
     try {
-      // Save reps for each exercise
-      for (const [exercise, reps] of Object.entries(repsToSave)) {
-        await updateProgressEntry(currentWeek, dayOfWeek, exercise, reps);
-        console.log(`Saved reps for ${exercise}:`, reps);
+      // Iterate through the repsToSave object
+      for (const [exerciseName, reps] of Object.entries(repsToSave)) {
+        console.log(`Updating reps for ${exerciseName}:`, reps); // Debug log
+        await updateProgressEntry(currentWeek, dayOfWeek, exerciseName, reps);
       }
 
       // Save notes
+      console.log("Updating notes:", notesToSave); // Debug log
       await updateProgressEntry(currentWeek, dayOfWeek, 'notes', notesToSave);
-      console.log('Saved notes:', notesToSave);
 
       toast.success('Workout saved successfully!');
       setEditData(null); // Reset edit state

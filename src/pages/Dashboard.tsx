@@ -121,7 +121,7 @@ export function Dashboard() {
         const exerciseExistsInPlan = weekSchedule.some((day) =>
           day.exercises.some((ex) => ex.name.toLowerCase().replace(/[- ]/g, '') === key)
         );
-        if (exerciseExistsInPlan) {
+        if (exerciseExistsInPlan && entry.reps && entry.reps[key] && Array.isArray(entry.reps[key])) {
           chartEntry[key] = entry.reps[key][0]; // Take first rep value for simplicity
         }
       });
@@ -389,8 +389,7 @@ export function Dashboard() {
               <p className="text-gray-500 dark:text-gray-400">Complete and save your workouts to start tracking your progress.</p>
             </div>
           ) : (
-            <div className="```html
-w-full h-64 sm:h-80">
+            <div className="w-full h-64 sm:h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={progressChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
