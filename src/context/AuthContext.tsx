@@ -83,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (error) {
+          console.error("Google Sign-in with OAuth error:", error); // Log detailed error
           throw error;
         }
         setGuest(false);

@@ -63,8 +63,8 @@ export function Dashboard() {
   }, [todaysWorkout]);
 
   const handleSyncGoogleFit = async () => {
-    if (!user?.googleToken) {
-      toast.error('Please sign in with Google to sync with Google Fit.');
+    if (!user) {
+      toast.error('Please login to sync with Google Fit.');
       return;
     }
 
@@ -72,68 +72,13 @@ export function Dashboard() {
     setError('');
 
     try {
-      // Define the time range (e.g., last 24 hours)
-      const endTime = Date.now();
-      const startTime = endTime - 24 * 60 * 60 * 1000; // 24 hours ago
+      await useAuth().signIn('google'); // Trigger Google Sign-in flow
 
-      // Fetch data from Google Fit API
-      const response = await axios.post(
-        'https://fitness.googleapis.com/fitness/v1/users/me/dataset:aggregate',
-        {
-          aggregateBy: [
-            { dataTypeName: 'com.google.step_count.delta' },
-            { dataTypeName: 'com.google.calories.expended' },
-            { dataTypeName: 'com.google.active_minutes' },
-          ],
-          bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 }, // Aggregate by day
-          startTimeMillis: startTime,
-          endTimeMillis: endTime,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${user.googleToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      // The rest of the Google Fit data fetching logic will be handled after successful sign-in
+      // in the AuthContext's useEffect when the user session changes.
+      // We don't need to duplicate the data fetching here.
+      toast.success('Please wait, syncing data from Google Fit...');
 
-      const buckets = response.data.bucket;
-      if (!buckets || buckets.length === 0) {
-        toast.error('No recent data found in Google Fit.');
-        setIsSyncing(false);
-        return;
-      }
-
-      // Extract data from the latest bucket
-      const latestBucket = buckets[buckets.length - 1];
-      let steps = 0;
-      let calories = 0;
-      let activeMinutes = 0;
-
-      latestBucket.dataset.forEach((dataset: any) => {
-        if (dataset.point && dataset.point.length > 0) {
-          const point = dataset.point[0];
-          switch (dataset.dataSourceId.split(':')[1]) {
-            case 'com.google.step_count.delta':
-              steps = point.value[0].intVal || 0;
-              break;
-            case 'com.google.calories.expended':
-              calories = point.value[0].fpVal || 0;
-              break;
-            case 'com.google.active_minutes':
-              activeMinutes = point.value[0].intVal || 0;
-              break;
-          }
-        }
-      });
-
-      // Update progressData with Google Fit data
-      const dayOfWeek = today;
-      if (steps > 0) await updateProgressEntry(currentWeek, dayOfWeek, 'steps', [steps]);
-      if (calories > 0) await updateProgressEntry(currentWeek, dayOfWeek, 'calories', [calories]);
-      if (activeMinutes > 0) await updateProgressEntry(currentWeek, dayOfWeek, 'activeMinutes', [activeMinutes]);
-
-      toast.success('Successfully synced data from Google Fit!');
     } catch (error: any) {
       console.error('Google Fit sync error:', error.response || error.message);
       toast.error('Failed to sync with Google Fit. Please try again.');
@@ -142,6 +87,7 @@ export function Dashboard() {
       setIsSyncing(false);
     }
   };
+
 
   const handleSaveWorkout = () => {
     if (!todaysWorkout || todaysWorkout.exercises.length === 0) return;
@@ -443,7 +389,8 @@ export function Dashboard() {
               <p className="text-gray-500 dark:text-gray-400">Complete and save your workouts to start tracking your progress.</p>
             </div>
           ) : (
-            <div className="w-full h-64 sm:h-80">
+            <div className="```html
+w-full h-64 sm:h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={progressChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
