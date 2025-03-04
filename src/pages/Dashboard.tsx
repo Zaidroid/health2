@@ -23,9 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkout } from '../context/WorkoutContext';
-import { HealthMetrics } from '../types';
 import { motion } from 'framer-motion';
-import { supabase } from '../lib/supabase';
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -36,7 +34,6 @@ export function Dashboard() {
     updateProgressEntry,
     getPlannedWorkout,
     trainingSchedules,
-    setProgressData,
   } = useWorkout();
 
   const todaysWorkout = getPlannedWorkout(selectedPlan);
@@ -48,46 +45,11 @@ export function Dashboard() {
   };
 
   const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: number[] }>({});
-  const [loadingProgress, setLoadingProgress] = useState(false);
-
-    useEffect(() => {
-    const fetchProgress = async () => {
-      if (user) {
-        setLoadingProgress(true);
-        try {
-          const { data, error } = await supabase
-            .from('user_progress')
-            .select('*')
-            .eq('user_id', user.id);
-
-          if (error) {
-            console.error('Error fetching progress data:', error);
-          } else if (data) {
-            // Transform the data into the format expected by the context
-            const transformedData = data.map(item => ({
-                week: item.week,
-                [item.exercise_name]: item.max_value, // Use exercise_name as the key
-                skillPractice: item.skill_practice,
-                notes: item.notes
-            }));
-            setProgressData(transformedData);
-          }
-        } catch (err) {
-          console.error('An unexpected error occurred:', err);
-        } finally {
-          setLoadingProgress(false);
-        }
-      }
-    };
-
-    fetchProgress();
-  }, [user, setProgressData]);
-
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     console.log("progressData in Dashboard:", progressData);
   }, [progressData]);
-
 
   const handleSyncGoogleFit = async () => {
     console.log('Syncing with Google Fit...');
@@ -96,41 +58,33 @@ export function Dashboard() {
   const handleSaveWorkout = () => {
     if (!todaysWorkout || todaysWorkout.exercises.length === 0) return;
 
+    setError('');
     todaysWorkout.exercises.forEach(exercise => {
       const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
       const values = workoutLogs[exerciseKey] || [];
+      const numericValues = values.filter(v => v !== '' && !isNaN(v)).map(Number);
 
-      // Filter out empty strings and convert to numbers
-      const numericValues = values.filter(v => v !== null && v !== undefined && v !== "").map(Number);
+      if (numericValues.length === 0) {
+        setError(`Please enter valid values for ${exercise.name}`);
+        return;
+      }
 
-
-      if (numericValues.length > 0) {
-        const maxValue = Math.max(...numericValues);
-        // Ensure maxValue is a positive number
-        if (maxValue > 0) {
-          // *** CRITICAL: Log maxValue and exercise.name ***
-          console.log("maxValue:", maxValue, "exercise.name:", exercise.name);
-          updateProgressEntry(currentWeek, exercise.name, maxValue);
-        } else {
-            console.log(`Skipping ${exercise.name} because maxValue is not positive:`, maxValue);
-        }
-      } else {
-          console.log(`Skipping ${exercise.name} because no valid values were entered.`);
+      const maxValue = Math.max(...numericValues);
+      if (maxValue > 0) {
+        updateProgressEntry(currentWeek, exercise.name, maxValue);
       }
     });
 
-    console.log('Daily workout saved for', today, 'in week', currentWeek);
+    if (!error) console.log('Daily workout saved for', today, 'in week', currentWeek);
   };
 
-  React.useEffect(() => {
-    if (todaysWorkout && todaysWorkout.exercises.length === 0) {
+  useEffect(() => {
+    if (todaysWorkout && todaysWorkout.exercises.length > 0) {
       const newLogs: { [key: string]: number[] } = {};
-
       todaysWorkout.exercises.forEach(exercise => {
         const exerciseKey = exercise.name.toLowerCase().replace(/[- ]/g, '');
-        newLogs[exerciseKey] = Array(exercise.sets).fill(0);
+        newLogs[exerciseKey] = Array(exercise.sets).fill('');
       });
-
       setWorkoutLogs(newLogs);
     }
   }, [todaysWorkout]);
@@ -179,13 +133,13 @@ export function Dashboard() {
     show: { opacity: 1, y: 0 },
   };
 
-    const latestWeekData = progressData.reduce((acc, entry) => {
-        return entry.week >= acc.week ? entry : acc;
-    }, { week: 0 });
+  const latestWeekData = progressData.reduce((acc, entry) => {
+    return entry.week >= acc.week ? entry : acc;
+  }, { week: 0 });
 
-    const derivedSteps = latestWeekData ? (latestWeekData['pushups'] || 0) * 100 : 0;
-    const derivedCalories = latestWeekData ? (latestWeekData['pullups'] || 0) * 50 : 0;
-    const derivedActiveMinutes = latestWeekData ? (latestWeekData['standardplank'] || 0) * 2 : 0;
+  const derivedSteps = latestWeekData ? (latestWeekData['pushups'] || 0) * 100 : 0;
+  const derivedCalories = latestWeekData ? (latestWeekData['pullups'] || 0) * 50 : 0;
+  const derivedActiveMinutes = latestWeekData ? (latestWeekData['standardplank'] || 0) * 2 : 0;
 
   return (
     <motion.div
@@ -194,11 +148,6 @@ export function Dashboard() {
       initial="hidden"
       animate="show"
     >
-      {loadingProgress && (
-        <div className="fixed inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-75">
-          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-purple-500"></div>
-        </div>
-      )}
       <motion.section
         className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
         variants={item}
@@ -249,7 +198,6 @@ export function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Steps Widget */}
           <motion.div
             className="bg-white dark:bg-dark-card p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
             whileHover={{
@@ -289,7 +237,6 @@ export function Dashboard() {
             </p>
           </motion.div>
 
-          {/* Calories Burned Widget */}
           <motion.div
             className="bg-white dark:bg-dark-card p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
             whileHover={{
@@ -329,7 +276,6 @@ export function Dashboard() {
             </p>
           </motion.div>
 
-          {/* Active Minutes Widget */}
           <motion.div
             className="bg-white dark:bg-dark-card p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700"
             whileHover={{
@@ -382,6 +328,8 @@ export function Dashboard() {
           </h2>
         </div>
         <div className="p-5">
+          {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+
           {!todaysWorkout || todaysWorkout.exercises.length === 0 ? (
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 text-center">
               <AlertCircle className="h-10 w-10 text-indigo-400 mx-auto mb-4" />
@@ -431,11 +379,9 @@ export function Dashboard() {
                             onChange={(e) => {
                               const newLogs = { ...workoutLogs };
                               if (!newLogs[exerciseKey]) {
-                                newLogs[exerciseKey] = Array(exercise.sets).fill(0);
+                                newLogs[exerciseKey] = Array(exercise.sets).fill('');
                               }
-                              newLogs[exerciseKey][setIndex] = parseInt(
-                                e.target.value || '0',
-                              );
+                              newLogs[exerciseKey][setIndex] = e.target.value;
                               setWorkoutLogs(newLogs);
                             }}
                           />
