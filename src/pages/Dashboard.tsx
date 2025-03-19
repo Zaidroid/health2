@@ -47,13 +47,17 @@ interface ChartData {
   [key: string]: string | number;
 }
 
+interface GoogleFitData {
+  steps: number;
+  calories: number;
+  activeMinutes: number;
+}
+
 export function Dashboard() {
   const { user } = useAuth();
   const { resolvedTheme, themeColor, getAccentColorClass } = useTheme();
 
-  // Log the current theme color to help debug
   console.log("Current theme color:", themeColor);
-  // Log a CSS variable value to verify it's applied
   console.log("CSS Variable --color-primary-600:", getComputedStyle(document.documentElement).getPropertyValue('--color-primary-600'));
   
   const selectedPlan = user?.selectedPlan || "Z Axis";
@@ -69,7 +73,6 @@ export function Dashboard() {
     getProgramUUID
   } = useWorkout();
 
-  // Use consistent program ID format - either name or UUID
   const selectedPlanUUID = getProgramUUID(selectedPlan);
   console.log("Selected plan:", selectedPlan, "UUID:", selectedPlanUUID);
   
@@ -77,7 +80,6 @@ export function Dashboard() {
   console.log("Today's workout:", todaysWorkout);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
   
-  // Convert WorkoutProgress to DailyProgress
   const todayProgress = progressData.find(
     (entry) => entry.week === currentWeek && entry.day === today
   );
@@ -99,7 +101,6 @@ export function Dashboard() {
       
       todaysWorkout.exercises.forEach((exercise) => {
         const exerciseKey = exercise.exerciseId;
-        // Initialize with existing data if available, otherwise empty array
         const existingReps = todayProgress?.exercises?.[exerciseKey]?.sets || Array(exercise.sets).fill(0);
         newLogs[exerciseKey] = existingReps;
       });
@@ -107,6 +108,49 @@ export function Dashboard() {
       setWorkoutLogs(newLogs);
     }
   }, [todaysWorkout, todayProgress, currentWeek, today]);
+
+  const fetchGoogleFitData = async (accessToken: string, startTime: number, endTime: number): Promise<GoogleFitData> => {
+    const clientId = '1069047474511-131vfopnlj0mao178o0am0olr1m4qoop.apps.googleusercontent.com';
+    const clientSecret = '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';
+
+    const dataSources = {
+      steps: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps',
+      calories: 'derived:com.google.calories.expended:com.google.android.gms:from_activities',
+      activeMinutes: 'derived:com.google.active_minutes:com.google.android.gms:from_activities'
+    };
+
+    const response = await axios.post(
+      'https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate',
+      {
+        aggregateBy: [
+          { dataTypeName: 'com.google.step_count.delta', dataSourceId: dataSources.steps },
+          { dataTypeName: 'com.google.calories.expended', dataSourceId: dataSources.calories },
+          { dataTypeName: 'com.google.active_minutes', dataSourceId: dataSources.activeMinutes }
+        ],
+        bucketByTime: { durationMillis: endTime - startTime },
+        startTimeMillis: startTime,
+        endTimeMillis: endTime
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const buckets = response.data.bucket;
+    if (!buckets || buckets.length === 0) {
+      return { steps: 0, calories: 0, activeMinutes: 0 };
+    }
+
+    const dataset = buckets[0].dataset;
+    return {
+      steps: dataset[0].point[0]?.value[0]?.intVal || 0,
+      calories: dataset[1].point[0]?.value[0]?.fpVal || 0,
+      activeMinutes: dataset[2].point[0]?.value[0]?.intVal || 0
+    };
+  };
 
   const handleSyncGoogleFit = async () => {
     if (!user) {
@@ -118,12 +162,45 @@ export function Dashboard() {
     setError('');
 
     try {
-      await useAuth().signIn('google'); // Trigger Google Sign-in flow
+      if (!user.googleToken) {
+        await useAuth().signIn('google');
+        toast.success('Please wait, syncing data from Google Fit...');
+        return;
+      }
 
-      // The rest of the Google Fit data fetching logic will be handled after successful sign-in
-      // in the AuthContext's useEffect when the user session changes.
-      // We don't need to duplicate the data fetching here.
-      toast.success('Please wait, syncing data from Google Fit...');
+      const timeNow = Date.now();
+      const time24hAgo = timeNow - (24 * 60 * 60 * 1000);
+
+      const fitnessData = await fetchGoogleFitData(user.googleToken, time24hAgo, timeNow);
+      
+      const newProgress: WorkoutProgress = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        week: currentWeek,
+        day: today,
+        date: new Date(),
+        exercises: {
+          ...currentWeekData.exercises,
+          steps: {
+            sets: [fitnessData.steps],
+            completed: true
+          },
+          calories: {
+            sets: [fitnessData.calories],
+            completed: true
+          },
+          activeMinutes: {
+            sets: [fitnessData.activeMinutes],
+            completed: true
+          }
+        },
+        notes: currentWeekData.notes,
+        completionRate: 0,
+        program_id: getProgramUUID(selectedPlan)
+      };
+
+      await updateProgress(newProgress);
+      toast.success('Successfully synced Google Fit data!');
 
     } catch (error: any) {
       console.error('Google Fit sync error:', error.response || error.message);
@@ -141,7 +218,6 @@ export function Dashboard() {
       const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
       const programId = getProgramUUID(user.selectedPlan);
       
-      // Calculate completion rate
       let totalSets = 0;
       let completedSets = 0;
       
@@ -152,7 +228,6 @@ export function Dashboard() {
       
       const completionRate = totalSets > 0 ? (completedSets / totalSets) * 100 : 0;
 
-      // Convert workoutLogs to ExerciseProgress format
       const exerciseProgress: { [exerciseId: string]: ExerciseProgress } = {};
       
       Object.entries(workoutLogs).forEach(([exerciseId, sets]) => {
@@ -202,7 +277,6 @@ export function Dashboard() {
         Object.entries(entry.exercises).forEach(([exerciseId, data]) => {
           const exercise = exercises.find(e => e.id === exerciseId);
           if (exercise && data.sets && data.sets.length > 0) {
-            // Use the maximum value from the sets as the progress indicator
             chartEntry[exercise.name] = Math.max(...data.sets);
           }
         });
@@ -214,10 +288,8 @@ export function Dashboard() {
 
   const progressChartData = generateProgressChartData();
 
-  // Use these color utility functions to generate dynamic styles
   const getBgGradient = () => `bg-gradient-to-r from-${themeColor}-600 to-${themeColor}-500`;
   
-  // More direct approach using CSS variables for icon backgrounds
   const getIconBg = (intensity = 100) => {
     const colorMap = {
       'indigo': intensity === 100 ? '#EEF2FF' : '#C7D2FE',
@@ -232,7 +304,6 @@ export function Dashboard() {
     };
   };
   
-  // More direct approach using CSS variables for icon colors
   const getIconColor = (intensity = 600) => {
     const colorMap = {
       'indigo': intensity === 600 ? '#4F46E5' : intensity === 400 ? '#818CF8' : '#6366F1',
@@ -251,7 +322,6 @@ export function Dashboard() {
   const getBtnBg = () => `${getAccentColorClass('bg', 600)}`;
   const getBtnHoverBg = () => `${getAccentColorClass('bg', 700)}`;
 
-  // Additional utility functions for chart colors and other elements
   const getColorHex = (defaultColor = '6366F1') => {
     const colorMap = {
       'indigo': '6366F1',
@@ -263,7 +333,6 @@ export function Dashboard() {
     return colorMap[themeColor] || defaultColor;
   };
   
-  // Generate a coordinated color palette based on the theme color
   const getChartColorPalette = () => {
     const basePalettes = {
       'indigo': ['#6366F1', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#06B6D4', '#F97316'],
@@ -276,7 +345,6 @@ export function Dashboard() {
     return basePalettes[themeColor] || basePalettes.indigo;
   };
 
-  // Get theme-specific gradient
   const getThemeGradient = () => {
     const gradients = {
       'indigo': 'linear-gradient(to right, rgba(79, 70, 229, 0.85), rgba(99, 102, 241, 0.85))',
@@ -289,7 +357,6 @@ export function Dashboard() {
     return gradients[themeColor] || gradients.indigo;
   };
 
-  // Get theme-specific gradient for progress bars (more muted version)
   const getProgressBarGradient = () => {
     const gradients = {
       'indigo': 'linear-gradient(to right, rgba(79, 70, 229, 0.7), rgba(99, 102, 241, 0.7))',
@@ -315,31 +382,26 @@ export function Dashboard() {
     show: { opacity: 1, y: 0 },
   };
 
-  // Helper function to check if an exercise has valid sets
   const hasValidSets = (exercise: ExerciseProgress | undefined): boolean => {
     const sets = exercise?.sets;
     return Boolean(sets && sets.length > 0);
   };
 
-  // Helper function to check if an exercise is completed
   const isExerciseCompleted = (exercise: ExerciseProgress | undefined): boolean => {
     return Boolean(exercise?.completed && hasValidSets(exercise));
   };
 
-  // Helper function to get the maximum value from an exercise's sets
   const getMaxSetValue = (exercise: ExerciseProgress | undefined): number => {
     const sets = exercise?.sets;
     if (!sets || sets.length === 0) return 0;
     return Math.max(...sets);
   };
 
-  // Helper function to check if skill practice is completed
   const isSkillPracticeCompleted = (exercises: ProgressData): boolean => {
     const skillPractice = exercises.skillPractice;
     return Boolean(skillPractice?.completed);
   };
 
-  // Use safe access to extract health metric values
   const getMetricValue = (metricName: string): number => {
     const entries = progressData.filter(entry => {
       const exercise = entry.exercises[metricName];
@@ -358,7 +420,6 @@ export function Dashboard() {
   const derivedCalories = getMetricValue('calories');
   const derivedActiveMinutes = getMetricValue('activeMinutes');
 
-  // Add this helper function at the top of the component
   const getTrainingDuration = (startDate: Date) => {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - startDate.getTime());
@@ -367,12 +428,10 @@ export function Dashboard() {
     return { days: diffDays, weeks: diffWeeks };
   };
 
-  // Inside the Dashboard component, add this before the return statement
   const trainingDuration = getTrainingDuration(user?.trainingStartDate || new Date());
   const todayWorkout = getPlannedWorkout(selectedPlanUUID);
   const isRestDay = !todayWorkout || todayWorkout.exercises.length === 0;
 
-  // Update the skill practice checkbox handler
   const handleSkillPracticeChange = async () => {
     if (!user) return;
     
@@ -398,7 +457,6 @@ export function Dashboard() {
     await updateProgress(newProgress);
   };
 
-  // Update the notes change handler
   const handleNotesChange = async (value: string) => {
     if (!user) return;
     
@@ -416,7 +474,6 @@ export function Dashboard() {
     await updateProgress(newProgress);
   };
 
-  // Update the JSX for skill practice checkbox
   const renderSkillPractice = () => {
     const isCompleted = isSkillPracticeCompleted(currentWeekData.exercises);
 
@@ -444,7 +501,6 @@ export function Dashboard() {
 
   return (
     <motion.div className="space-y-6" variants={container} initial="hidden" animate="show">
-      {/* Header Section */}
       <motion.section className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700" variants={item}>
         <div 
           className="relative overflow-hidden p-4 md:p-6 rounded-2xl"
@@ -461,8 +517,8 @@ export function Dashboard() {
             <div className="flex flex-col space-y-3">
               <div>
                 <h1 className="text-lg md:text-xl font-bold text-white">
-              Welcome back, {user?.name || 'Fitness Enthusiast'}
-            </h1>
+                  Welcome back, {user?.name || 'Fitness Enthusiast'}
+                </h1>
                 <p className="text-white/90 text-sm">Let's crush your fitness goals today!</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -480,7 +536,6 @@ export function Dashboard() {
         </div>
       </motion.section>
 
-      {/* Health Metrics Section */}
       <motion.section variants={item}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-200 flex items-center">
@@ -593,7 +648,6 @@ export function Dashboard() {
         </div>
       </motion.section>
 
-      {/* Today's Workout Section */}
       <motion.section className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-gray-700" variants={item}>
         <div className="border-b border-gray-200 dark:border-gray-700 p-5">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-200 flex items-center">
@@ -648,9 +702,9 @@ export function Dashboard() {
                                 <CheckCircle className="h-4 w-4" style={{ color: '#22C55E' }} />
                               </div>
                             )}
-                          <input
-                            type="number"
-                            placeholder={`Set ${setIndex + 1}`}
+                            <input
+                              type="number"
+                              placeholder={`Set ${setIndex + 1}`}
                               className={`w-full px-3 py-2 rounded-md border ${wasCompletedPreviously 
                                 ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/30' 
                                 : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'} 
@@ -659,14 +713,14 @@ export function Dashboard() {
                               style={wasCompletedPreviously ? {} : {
                                 "--tw-ring-color": `rgb(var(--color-primary-500) / 0.5)`
                               } as React.CSSProperties}
-                            value={workoutLogs[exerciseKey]?.[setIndex] || ''}
-                            onChange={(e) => {
-                              const newLogs = { ...workoutLogs };
-                              if (!newLogs[exerciseKey]) newLogs[exerciseKey] = Array(exercise.sets).fill('');
+                              value={workoutLogs[exerciseKey]?.[setIndex] || ''}
+                              onChange={(e) => {
+                                const newLogs = { ...workoutLogs };
+                                if (!newLogs[exerciseKey]) newLogs[exerciseKey] = Array(exercise.sets).fill('');
                                 newLogs[exerciseKey][setIndex] = parseInt(e.target.value, 10) || 0;
-                              setWorkoutLogs(newLogs);
-                            }}
-                          />
+                                setWorkoutLogs(newLogs);
+                              }}
+                            />
                           </div>
                         </motion.div>
                       );
@@ -721,7 +775,6 @@ export function Dashboard() {
         </div>
       </motion.section>
 
-      {/* Progress Chart Section */}
       <motion.section className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-gray-700" variants={item}>
         <div className="border-b border-gray-200 dark:border-gray-700 p-5">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-200 flex items-center">
@@ -759,7 +812,6 @@ export function Dashboard() {
                     Object.keys(progressChartData[0])
                       .filter((key) => key !== 'week')
                       .map((key, index) => {
-                        // Use our coordinated color palette
                         const colors = getChartColorPalette();
                         const color = colors[index % colors.length];
                         return (
