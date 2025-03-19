@@ -84,9 +84,11 @@ export const ThemeToggle = () => {
 
   return (
     <div className="relative inline-block">
-      <button
+      <motion.button
         ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
         className={`p-2 rounded-full transition-colors duration-200 ${
           resolvedTheme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
         }`}
@@ -95,7 +97,7 @@ export const ThemeToggle = () => {
         aria-haspopup="menu"
       >
         <Palette className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-      </button>
+      </motion.button>
 
       <AnimatePresence>
         {isOpen && (
@@ -120,15 +122,16 @@ export const ThemeToggle = () => {
                 {themeOptions.map((option) => (
                   <motion.button
                     key={option.value}
-                    whileHover={{ x: 3 }}
+                    whileHover={{ scale: 1.05, backgroundColor: `rgba(var(--color-primary-200), ${resolvedTheme === 'dark' ? '0.1' : '0.5'})` }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setThemeManually(option.value as any);
                       setIsOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md ${
+                    className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-all duration-200 ${
                       theme === option.value
-                        ? 'text-gray-700 dark:text-gray-300' 
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        ? 'text-gray-700 dark:text-gray-300'
+                        : 'text-gray-700 dark:text-gray-300'
                     }`}
                     style={theme === option.value ? {
                       ...getThemeColorStyle(700),

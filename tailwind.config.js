@@ -38,6 +38,7 @@ module.exports = {
         'slide-up-fade': 'slideUpFade 0.4s ease-out',
         'progress': 'progress 2s ease-in-out',
         'color-shift': 'colorShift 8s infinite',
+        'pop': 'pop 0.25s ease-out', // Added pop animation
       },
       keyframes: {
         float: {
@@ -60,7 +61,12 @@ module.exports = {
           '0%, 100%': { backgroundColor: 'rgb(var(--color-primary-500))' },
           '33%': { backgroundColor: 'rgb(var(--color-primary-600))' },
           '66%': { backgroundColor: 'rgb(var(--color-primary-400))' },
-        }
+        },
+        pop: { // Keyframes for pop animation
+          '0%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.05)' },
+          '100%': { transform: 'scale(1)' },
+        },
       },
       backgroundImage: {
         'gradient-primary': 'linear-gradient(to right, rgb(var(--color-primary-600)), rgb(var(--color-primary-500)))',
@@ -88,6 +94,35 @@ module.exports = {
         '.ring-primary': {
           '--tw-ring-color': 'rgb(var(--color-primary-500))',
         },
+        '.animate-pop': { // Added utility class for pop animation
+          'animation-name': 'pop',
+          'animation-duration': '0.25s',
+          'animation-timing-function': 'ease-out',
+        },
+        '.motion-hover-scale': {
+          'transition-property': 'transform',
+          'transition-timing-function': 'ease',
+          'transition-duration': '0.2s',
+        },
+        '.motion-hover-scale:hover': {
+          'transform': 'scale(1.02)',
+        },
+        '.motion-tap-scale': {
+          'transition-property': 'transform',
+          'transition-timing-function': 'ease',
+          'transition-duration': '0.1s',
+        },
+        '.motion-tap-scale:active': {
+          'transform': 'scale(0.98)',
+        },
+        '.motion-hover-shadow': {
+          'transition-property': 'box-shadow',
+          'transition-timing-function': 'ease',
+          'transition-duration': '0.2s',
+        },
+        '.motion-hover-shadow:hover': {
+          'box-shadow': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        }
       };
       addUtilities(newUtilities);
     }

@@ -90,6 +90,16 @@ export function Layout() {
     { path: '/workoutprogress', label: 'Workout Progress', icon: <TrendingUp className="h-5 w-5" /> },
   ];
 
+  // Define a base animation object for navigation items
+  const navItemAnimation = {
+    whileHover: {
+      scale: 1.02, // Reduced scale for more subtle effect
+      backgroundColor: `rgba(var(--color-primary-200), ${resolvedTheme === 'dark' ? '0.1' : '0.5'})`,
+      transition: { duration: 0.15 } // Reduced duration for smoother animation
+    },
+    whileTap: { scale: 0.98 } // Reduced scale for more subtle effect
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       <nav className="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-50">
@@ -115,57 +125,38 @@ export function Layout() {
                 {navItems.map((item) => {
                   const isActive = location.pathname === item.path;
                   return (
-                    <Link
+                    <motion.div
                       key={item.path}
-                      to={item.path}
-                      className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 ${
-                        isActive
-                          ? ''
-                          : 'text-gray-600 dark:text-gray-300'
-                      }`}
-                      style={
-                        isActive 
-                          ? { 
-                              backgroundColor: resolvedTheme === 'dark' ? `rgba(${colors.darkSolid}, 0.4)` : `rgba(${colors.lightSolid}, 0.9)`,
-                              color: colors.primary,
-                              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                              borderLeft: `2px solid ${colors.primary}`
-                            }
-                          : {}
-                      }
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.backgroundColor = resolvedTheme === 'dark' ? `rgba(${colors.darkSolid}, 0.3)` : `rgba(${colors.lightSolid}, 0.7)`;
-                          e.currentTarget.style.color = colors.primary;
-                          e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
-                          e.currentTarget.style.borderLeft = `2px solid ${colors.accent}`;
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.backgroundColor = '';
-                          e.currentTarget.style.color = '';
-                          e.currentTarget.style.boxShadow = '';
-                          e.currentTarget.style.borderLeft = '';
-                        }
-                      }}
+                      className="relative"
+                      whileHover={navItemAnimation.whileHover}
+                      whileTap={navItemAnimation.whileTap}
                     >
-                      <motion.div
-                        className="flex-shrink-0 mr-2"
-                        initial={{ scale: 1 }}
-                        animate={{ 
-                          scale: isActive ? 1.1 : 1,
-                          color: isActive ? colors.primary : (resolvedTheme === 'dark' ? '#cbd5e1' : '#4b5563')
-                        }}
-                        whileHover={{ scale: 1.1 }}
+                      <Link
+                        to={item.path}
+                        className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                          isActive
+                            ? 'text-gray-900 dark:text-white border' // Added border
+                            : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                        }`}
                         style={{
-                          textShadow: isActive ? '0px 1px 1px rgba(0, 0, 0, 0.05)' : 'none'
+                          backgroundColor: isActive ? `rgba(var(--color-primary-500), ${resolvedTheme === 'dark' ? '0.2' : '0.1'})` : 'transparent',
+                          borderColor: isActive ? colors.accent : 'transparent', // Conditional border color
                         }}
                       >
-                        {item.icon}
-                      </motion.div>
-                      {item.label}
-                    </Link>
+                        <span className="mr-2" style={{ color: isActive ? colors.primary : 'inherit' }}>
+                          {item.icon}
+                        </span>
+                        <span>{item.label}</span>
+                        {isActive && (
+                          <motion.span
+                            initial={{ width: 0 }}
+                            animate={{ width: '100%' }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute bottom-0 left-0 h-0.5 bg-primary-500 rounded-full"
+                          />
+                        )}
+                      </Link>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -176,33 +167,26 @@ export function Layout() {
               {/* Desktop User Profile and Sign Out */}
               <div className="hidden md:flex items-center space-x-3">
                 <motion.button
-                  whileHover={{ 
-                    scale: 1.02,
-                    boxShadow: `0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04)`
-                  }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: 1.05, backgroundColor: `rgba(var(--color-primary-200), ${resolvedTheme === 'dark' ? '0.1' : '0.5'})` }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => navigate('/profile')}
-                  className="flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-300"
-                  style={{ 
-                    color: colors.primary,
+                  className="flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200"
+                  style={{
+                    color: colors.accent,
                     border: `1px solid ${colors.accent}`,
                     backgroundColor: resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(249, 250, 251, 0.8)'
                   }}
                 >
-                  <User className="h-4 w-4 mr-2" style={{ color: colors.primary }} />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <span className="text-sm font-medium">
                     {user?.name || 'Guest'}
                   </span>
                 </motion.button>
                 <motion.button
-                  whileHover={{ 
-                    scale: 1.02,
-                    boxShadow: `0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04)`
-                  }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: 1.05, backgroundColor: `rgba(var(--color-primary-200), ${resolvedTheme === 'dark' ? '0.1' : '0.5'})` }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={signOut}
-                  className="flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-300"
-                  style={{ 
+                  className="flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200"
+                  style={{
                     color: colors.primary,
                     border: `1px solid ${colors.accent}`,
                     backgroundColor: resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(249, 250, 251, 0.8)'
@@ -218,20 +202,21 @@ export function Layout() {
 
               {/* Mobile Menu Button */}
               <div className="md:hidden">
-                <button
+                <motion.button
                   onClick={toggleMobileMenu}
-                  className="p-2 rounded-md transition-all duration-300"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="p-2 rounded-md transition-colors duration-200"
                   aria-label="Toggle mobile menu"
-                  style={{ 
+                  style={{
                     color: mobileMenuOpen ? colors.accent : colors.primary,
-                    border: mobileMenuOpen ? `1px solid ${colors.accent}` : 'none',
-                    backgroundColor: mobileMenuOpen 
-                      ? (resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(249, 250, 251, 0.8)') 
+                    backgroundColor: mobileMenuOpen
+                      ? (resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(249, 250, 251, 0.8)')
                       : 'transparent'
                   }}
                 >
                   {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-                </button>
+                </motion.button>
               </div>
             </div>
           </div>
@@ -250,102 +235,79 @@ export function Layout() {
                   {navItems.map((item) => {
                     const isActive = location.pathname === item.path;
                     return (
-                      <Link
+                      <motion.div
                         key={item.path}
-                        to={item.path}
-                        className={`flex items-center px-3 py-2 rounded-md text-base font-medium transition-all duration-300 ${
-                          isActive
-                            ? ''
-                            : 'text-gray-600 dark:text-gray-300'
-                        }`}
-                        style={
-                          isActive 
-                            ? { 
-                                backgroundColor: resolvedTheme === 'dark' ? `rgba(${colors.darkSolid}, 0.4)` : `rgba(${colors.lightSolid}, 0.9)`,
-                                color: colors.primary,
-                                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                                borderLeft: `2px solid ${colors.primary}`
-                              }
-                            : {}
-                        }
-                        onMouseEnter={(e) => {
-                          if (!isActive) {
-                            e.currentTarget.style.backgroundColor = resolvedTheme === 'dark' ? `rgba(${colors.darkSolid}, 0.3)` : `rgba(${colors.lightSolid}, 0.7)`;
-                            e.currentTarget.style.color = colors.primary;
-                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
-                            e.currentTarget.style.borderLeft = `2px solid ${colors.accent}`;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isActive) {
-                            e.currentTarget.style.backgroundColor = '';
-                            e.currentTarget.style.color = '';
-                            e.currentTarget.style.boxShadow = '';
-                            e.currentTarget.style.borderLeft = '';
-                          }
-                        }}
-                        onClick={() => setMobileMenuOpen(false)}
+                        className="relative"
+                        whileHover={navItemAnimation.whileHover}
+                        whileTap={navItemAnimation.whileTap}
                       >
-                        {item.icon && (
-                          <motion.div
-                            className="flex-shrink-0 mr-2"
-                            initial={{ scale: 1 }}
-                            animate={{ 
-                              scale: isActive ? 1.1 : 1,
-                              color: isActive ? colors.primary : (resolvedTheme === 'dark' ? '#cbd5e1' : '#4b5563')
-                            }}
-                            whileHover={{ scale: 1.1 }}
-                            style={{
-                              textShadow: isActive ? '0px 1px 1px rgba(0, 0, 0, 0.05)' : 'none'
-                            }}
-                          >
+                        <Link
+                          to={item.path}
+                          className={`flex items-center px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
+                            isActive
+                              ? 'text-gray-900 dark:text-white border' // Added border
+                              : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                          }`}
+                          style={{
+                            backgroundColor: isActive ? `rgba(var(--color-primary-500), ${resolvedTheme === 'dark' ? '0.2' : '0.1'})` : 'transparent',
+                            borderColor: isActive ? colors.accent : 'transparent', // Conditional border color
+                          }}
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          <span className="mr-2" style={{ color: isActive ? colors.primary : 'inherit' }}>
                             {item.icon}
-                          </motion.div>
-                        )}
-                        <span>{item.label}</span>
-                      </Link>
+                          </span>
+                          <span>{item.label}</span>
+                          {isActive && (
+                            <motion.span
+                              initial={{ width: 0 }}
+                              animate={{ width: '100%' }}
+                              transition={{ duration: 0.2 }}
+                              className="absolute bottom-0 left-0 h-0.5 bg-primary-500 rounded-full"
+                            />
+                          )}
+                        </Link>
+                      </motion.div>
                     );
                   })}
-                  
+
                   {/* User profile in mobile menu */}
                   <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <motion.button
-                      onClick={() => {
-                        navigate('/profile');
-                        setMobileMenuOpen(false);
-                      }}
-                      className="w-full flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-300"
-                      style={{ 
-                        backgroundColor: colors.light,
-                        color: colors.dark,
-                        border: `1px solid ${colors.accent}`
-                      }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <User className="h-4 w-4 mr-2" style={{ color: colors.primary }} />
-                      {user?.name || 'Guest'}
-                    </motion.button>
-                    <motion.button
-                      onClick={() => {
-                        signOut();
-                        setMobileMenuOpen(false);
-                      }}
-                      className="mt-2 w-full flex items-center justify-center px-3 py-2 rounded-md text-base font-medium transition-all duration-300"
-                      style={{ 
-                        color: colors.primary,
-                        border: `1px solid ${colors.accent}`,
-                        backgroundColor: resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(249, 250, 251, 0.8)'
-                      }}
-                      whileHover={{ 
-                        scale: 1.02,
-                        boxShadow: '0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04)'
-                      }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <LogOut className="h-4 w-4 mr-2" style={{ color: colors.accent }} />
-                      Sign Out
-                    </motion.button>
+                    <div className="flex space-x-2"> {/* Container for buttons */}
+                      <motion.button
+                        onClick={() => {
+                          navigate('/profile');
+                          setMobileMenuOpen(false);
+                        }}
+                        className="flex-1 flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-300"
+                        style={{
+                          color: colors.accent,
+                          border: `1px solid ${colors.accent}`,
+                          backgroundColor: resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(249, 250, 251, 0.8)'
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {user?.name || 'Guest'}
+                      </motion.button>
+                      <motion.button
+                        onClick={() => {
+                          signOut();
+                          setMobileMenuOpen(false);
+                        }}
+                        className="flex-1 flex items-center justify-center px-3 py-2 rounded-md text-base font-medium transition-all duration-300"
+                        style={{
+                          color: colors.primary,
+                          border: `1px solid ${colors.accent}`,
+                          backgroundColor: resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(249, 250, 251, 0.8)'
+                        }}
+                        whileHover={{ scale: 1.05, backgroundColor: `rgba(var(--color-primary-200), ${resolvedTheme === 'dark' ? '0.1' : '0.5'})` }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <LogOut className="h-4 w-4 mr-2" style={{ color: colors.accent }} />
+                        
+                      </motion.button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
