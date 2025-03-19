@@ -8,7 +8,8 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext'; // Import ThemeProvider
 import { AnimatePresence } from 'framer-motion';
 import { LoadingScreen } from './components/LoadingScreen';
-import { WorkoutProgress } from './pages/WorkoutProgress';
+import { WorkoutProgressV2 } from './pages/WorkoutProgressV2';
+import { Profile } from './pages/Profile';
 
 function App() {
   return (
@@ -21,7 +22,8 @@ function App() {
               <Route path="/" element={<Layout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="calendar" element={<Calendar />} />
-                <Route path="workoutprogress" element={<WorkoutProgress />} />
+                <Route path="workoutprogress" element={<WorkoutProgressV2 />} />
+                <Route path="profile" element={<Profile />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

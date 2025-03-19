@@ -11,6 +11,7 @@ type ThemeContextProps = {
   setThemeManually: (newTheme: Theme) => void;
   setThemeColor: (color: ThemeColor) => void;
   resolvedTheme: 'light' | 'dark'; // The actual theme after system preference is applied
+  getAccentColorClass: (type: 'bg' | 'text' | 'border' | 'ring' | 'gradient', intensity?: number) => string;
 };
 
 const ThemeContext = createContext<ThemeContextProps | undefined>(undefined);
@@ -71,6 +72,30 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]); // Only depend on theme
+
+  // Function to get tailwind classes based on current theme color
+  const getAccentColorClass = (type: 'bg' | 'text' | 'border' | 'ring' | 'gradient', intensity: number = 500): string => {
+    // Adjust intensity for dark mode to improve contrast
+    const adjustedIntensity = resolvedTheme === 'dark' ? 
+      (type === 'bg' ? Math.min(intensity - 100, 900) : 
+       type === 'text' ? Math.max(intensity - 200, 300) : 
+       intensity) : intensity;
+    
+    switch (type) {
+      case 'bg':
+        return `bg-${themeColor}-${adjustedIntensity}`;
+      case 'text':
+        return `text-${themeColor}-${adjustedIntensity}`;
+      case 'border':
+        return `border-${themeColor}-${adjustedIntensity}`;
+      case 'ring':
+        return `ring-${themeColor}-${adjustedIntensity}`;
+      case 'gradient':
+        return `from-${themeColor}-${adjustedIntensity} to-${themeColor}-${adjustedIntensity + 100}`;
+      default:
+        return '';
+    }
+  };
 
   // Custom setter for theme color that ensures theme class is applied
   const setThemeColor = (color: ThemeColor) => {
@@ -136,7 +161,8 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         toggleTheme,
         setThemeManually,
         setThemeColor,
-        resolvedTheme
+        resolvedTheme,
+        getAccentColorClass
       }}
     >
       {children}

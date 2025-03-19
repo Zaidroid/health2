@@ -1,10 +1,18 @@
+export type FitnessLevel = 'beginner' | 'intermediate' | 'advanced';
+export type ExerciseType = 'reps' | 'duration';
+
 export interface User {
   id: string;
   email: string;
   name: string;
-  googleToken: string;
+  googleToken?: string;
   trainingStartDate: Date;
-  selectedPlan: string; // Add selectedPlan to User interface
+  selectedPlan: string;
+  weight?: number;
+  height?: number;
+  age?: number;
+  fitnessLevel: FitnessLevel;
+  goals: string[];
 }
 
 export interface WorkoutPlan {
@@ -16,10 +24,12 @@ export interface WorkoutDay {
 }
 
 export interface Exercise {
+  id: string;
   name: string;
-  sets: number;
-  targetReps: number;
-  type: 'reps' | 'time';
+  description?: string;
+  type: ExerciseType;
+  equipment: string[];
+  muscleGroups: string[];
 }
 
 export interface ProgressEntry {
@@ -30,8 +40,53 @@ export interface ProgressEntry {
 }
 
 export interface HealthMetrics {
+  date: Date;
+  weight?: number;
   steps: number;
   caloriesBurned: number;
   activeMinutes: number;
-  lastSynced: Date;
+}
+
+export interface WorkoutExercise {
+  exerciseId: string;
+  name: string;
+  sets: number;
+  targetReps: string;
+  type: ExerciseType;
+}
+
+export interface DailyWorkout {
+  day: string;
+  exercises: WorkoutExercise[];
+}
+
+export interface TrainingProgram {
+  id: string;
+  name: string;
+  description: string;
+  durationWeeks: number;
+  difficulty: FitnessLevel;
+}
+
+export interface ExerciseSets extends Array<number> {}
+
+export interface ExerciseProgress {
+  sets: ExerciseSets;
+  completed: boolean;
+}
+
+export interface WorkoutProgress {
+  id: string;
+  userId: string;
+  program_id?: string;
+  week: number;
+  day: string;
+  date: Date;
+  exercises: { [exerciseId: string]: ExerciseProgress };
+  notes?: string;
+  completionRate: number;
+}
+
+export interface ProgressData {
+  [exerciseId: string]: ExerciseProgress;
 }

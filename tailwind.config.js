@@ -37,6 +37,7 @@ module.exports = {
         'bounce-subtle': 'bounce-subtle 2s ease-in-out infinite',
         'slide-up-fade': 'slideUpFade 0.4s ease-out',
         'progress': 'progress 2s ease-in-out',
+        'color-shift': 'colorShift 8s infinite',
       },
       keyframes: {
         float: {
@@ -55,10 +56,40 @@ module.exports = {
           '0%': { width: '0%' },
           '100%': { width: '100%' },
         },
+        colorShift: {
+          '0%, 100%': { backgroundColor: 'rgb(var(--color-primary-500))' },
+          '33%': { backgroundColor: 'rgb(var(--color-primary-600))' },
+          '66%': { backgroundColor: 'rgb(var(--color-primary-400))' },
+        }
+      },
+      backgroundImage: {
+        'gradient-primary': 'linear-gradient(to right, rgb(var(--color-primary-600)), rgb(var(--color-primary-500)))',
+        'gradient-secondary': 'linear-gradient(to right, rgb(var(--color-primary-700)), rgb(var(--color-primary-600)))',
       },
     },
   },
   plugins: [
     require('@tailwindcss/forms'),
+    // Add custom utility classes for theme colors
+    function({ addUtilities, theme }) {
+      const newUtilities = {
+        '.text-gradient-primary': {
+          'background-image': 'linear-gradient(to right, rgb(var(--color-primary-600)), rgb(var(--color-primary-400)))',
+          '-webkit-background-clip': 'text',
+          'background-clip': 'text',
+          'color': 'transparent',
+        },
+        '.bg-gradient-primary': {
+          'background-image': 'linear-gradient(to right, rgb(var(--color-primary-600)), rgb(var(--color-primary-500)))',
+        },
+        '.border-primary': {
+          'border-color': 'rgb(var(--color-primary-500))',
+        },
+        '.ring-primary': {
+          '--tw-ring-color': 'rgb(var(--color-primary-500))',
+        },
+      };
+      addUtilities(newUtilities);
+    }
   ],
 }

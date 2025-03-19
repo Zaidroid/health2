@@ -1,705 +1,567 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { User } from '@supabase/supabase-js';
+import { 
+  WorkoutProgress, 
+  DailyWorkout, 
+  TrainingProgram, 
+  Exercise,
+  WorkoutExercise
+} from '../types';
 
-type ExerciseType = 'reps' | 'duration';
-
-interface Exercise {
-  name: string;
-  sets: number;
-  targetReps?: string;
-  type: ExerciseType;
-}
-
-interface DailyWorkout {
-  day: string;
-  exercises: Exercise[];
-}
-
-interface WeeklyPlan {
-  [week: number]: DailyWorkout[];
-}
-
-interface UserProgressEntry {
-  week: number;
-  day: string; // Added day
-  reps: { [exerciseName: string]: number[] }; // Changed to store reps per set
-  notes?: string; // Added notes
-}
-
-type WorkoutContextType = {
+interface WorkoutContextType {
   currentWeek: number;
   setCurrentWeek: (week: number) => void;
-  progressData: UserProgressEntry[];
-  updateProgressEntry: (week: number, day: string, exerciseName: string, value: number[] | string) => void; // Updated type
-  getPlannedWorkout: (planName: string) => DailyWorkout | undefined;
-  trainingSchedules: { [planName: string]: WeeklyPlan };
-  progressionPlans: { [planName: string]: { [week: number]: { [exerciseName: string]: string } } };
-  setProgressData: (data: UserProgressEntry[]) => void;
-};
+  progressData: WorkoutProgress[];
+  updateProgress: (progress: Partial<WorkoutProgress>) => Promise<void>;
+  getPlannedWorkout: (programId: string) => DailyWorkout | undefined;
+  trainingPrograms: TrainingProgram[];
+  exercises: Exercise[];
+  dailyWorkouts: { [programId: string]: { [week: number]: DailyWorkout[] } };
+  loadingWorkouts: boolean;
+  getProgramUUID: (programName: string) => string;
+}
 
 const WorkoutContext = createContext<WorkoutContextType | undefined>(undefined);
 
-type WorkoutProviderProps = {
-  children: ReactNode;
+// Map program names to their UUIDs
+const PROGRAM_UUID_MAP: { [key: string]: string } = {
+  'Z Axis': '550e8400-e29b-41d4-a716-446655440000',
+  'T Bone': '550e8400-e29b-41d4-a716-446655440001'
 };
 
-const zAxisTrainingSchedule: WeeklyPlan = {
-  1: [
-    {
-      day: 'Monday',
-      exercises: [
-        { name: 'Push-ups', sets: 3, targetReps: '10-15', type: 'reps' },
-        { name: 'Dips', sets: 3, targetReps: '8-12', type: 'reps' },
-        { name: 'Resistance band shoulder press', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Tuesday',
-      exercises: [
-        { name: 'Glute bridges', sets: 3, targetReps: '15', type: 'reps' },
-        { name: 'Bodyweight squats', sets: 3, targetReps: '12', type: 'reps' },
-        { name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' },
-      ],
-    },
-    { day: 'Wednesday', exercises: [] },
-    {
-      day: 'Thursday',
-      exercises: [
-        { name: 'Pull-ups', sets: 3, targetReps: '3-5', type: 'reps' },
-        { name: 'Inverted rows', sets: 3, targetReps: '8-10', type: 'reps' },
-        { name: 'Resistance band bicep curls', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Friday',
-      exercises: [
-        { name: 'Handstand wall walks', sets: 3, targetReps: '5', type: 'reps' },
-        { name: 'Wall-supported handstand hold', sets: 3, targetReps: '15-30', type: 'duration' },
-        { name: 'Standard plank', sets: 3, targetReps: '20-30', type: 'duration' },
-        { name: 'Side planks', sets: 3, targetReps: '15-20', type: 'duration' },
-      ],
-    },
-    {
-      day: 'Saturday',
-      exercises: [
-        { name: 'Burpees', sets: 3, targetReps: '10', type: 'reps' },
-        { name: 'Mountain climbers', sets: 3, targetReps: '20', type: 'reps' },
-        { name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    { day: 'Sunday', exercises: [] },
-  ],
-  2: [
-    {
-      day: 'Monday',
-      exercises: [
-        { name: 'Push-ups', sets: 3, targetReps: '10-15', type: 'reps' },
-        { name: 'Dips', sets: 3, targetReps: '8-12', type: 'reps' },
-        { name: 'Resistance band shoulder press', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Tuesday',
-      exercises: [
-        { name: 'Glute bridges', sets: 3, targetReps: '15', type: 'reps' },
-        { name: 'Bodyweight squats', sets: 3, targetReps: '12', type: 'reps' },
-        { name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' },
-      ],
-    },
-    { day: 'Wednesday', exercises: [] },
-    {
-      day: 'Thursday',
-      exercises: [
-        { name: 'Pull-ups', sets: 3, targetReps: '3-5', type: 'reps' },
-        { name: 'Inverted rows', sets: 3, targetReps: '8-10', type: 'reps' },
-        { name: 'Resistance band bicep curls', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Friday',
-      exercises: [
-        { name: 'Handstand wall walks', sets: 3, targetReps: '5', type: 'reps' },
-        { name: 'Wall-supported handstand hold', sets: 3, targetReps: '15-30', type: 'duration' },
-        { name: 'Standard plank', sets: 3, targetReps: '20-30', type: 'duration' },
-        { name: 'Side planks', sets: 3, targetReps: '15-20', type: 'duration' },
-      ],
-    },
-    {
-      day: 'Saturday',
-      exercises: [
-        { name: 'Burpees', sets: 3, targetReps: '10', type: 'reps' },
-        { name: 'Mountain climbers', sets: 3, targetReps: '20', type: 'reps' },
-        { name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    { day: 'Sunday', exercises: [] },
-  ],
-  3: [
-    {
-      day: 'Monday',
-      exercises: [
-        { name: 'Push-ups', sets: 3, targetReps: '15-20', type: 'reps' },
-        { name: 'Dips', sets: 3, targetReps: '8-12', type: 'reps' },
-        { name: 'Resistance band shoulder press', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Tuesday',
-      exercises: [
-        { name: 'Glute bridges', sets: 3, targetReps: '15', type: 'reps' },
-        { name: 'Bodyweight squats', sets: 3, targetReps: '12', type: 'reps' },
-        { name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' },
-      ],
-    },
-    { day: 'Wednesday', exercises: [] },
-    {
-      day: 'Thursday',
-      exercises: [
-        { name: 'Pull-ups', sets: 3, targetReps: '4-6', type: 'reps' },
-        { name: 'Inverted rows', sets: 3, targetReps: '8-10', type: 'reps' },
-        { name: 'Resistance band bicep curls', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Friday',
-      exercises: [
-        { name: 'Handstand wall walks', sets: 3, targetReps: '5', type: 'reps' },
-        { name: 'Wall-supported handstand hold', sets: 3, targetReps: '30-45', type: 'duration' },
-        { name: 'Standard plank', sets: 3, targetReps: '30-45', type: 'duration' },
-        { name: 'Side planks', sets: 3, targetReps: '15-20', type: 'duration' },
-      ],
-    },
-    {
-      day: 'Saturday',
-      exercises: [
-        { name: 'Burpees', sets: 3, targetReps: '10', type: 'reps' },
-        { name: 'Mountain climbers', sets: 3, targetReps: '20', type: 'reps' },
-        { name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    { day: 'Sunday', exercises: [] },
-  ],
-  4: [
-    {
-      day: 'Monday',
-      exercises: [
-        { name: 'Push-ups', sets: 3, targetReps: '15-20', type: 'reps' },
-        { name: 'Dips', sets: 3, targetReps: '8-12', type: 'reps' },
-        { name: 'Resistance band shoulder press', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Tuesday',
-      exercises: [
-        { name: 'Glute bridges', sets: 3, targetReps: '15', type: 'reps' },
-        { name: 'Bodyweight squats', sets: 3, targetReps: '12', type: 'reps' },
-        { name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' },
-      ],
-    },
-    { day: 'Wednesday', exercises: [] },
-    {
-      day: 'Thursday',
-      exercises: [
-        { name: 'Pull-ups', sets: 3, targetReps: '4-6', type: 'reps' },
-        { name: 'Inverted rows', sets: 3, targetReps: '8-10', type: 'reps' },
-        { name: 'Resistance band bicep curls', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Friday',
-      exercises: [
-        { name: 'Handstand wall walks', sets: 3, targetReps: '5', type: 'reps' },
-        { name: 'Wall-supported handstand hold', sets: 3, targetReps: '30-45', type: 'duration' },
-        { name: 'Standard plank', sets: 3, targetReps: '30-45', type: 'duration' },
-        { name: 'Side planks', sets: 3, targetReps: '15-20', type: 'duration' },
-      ],
-    },
-    {
-      day: 'Saturday',
-      exercises: [
-        { name: 'Burpees', sets: 3, targetReps: '10', type: 'reps' },
-        { name: 'Mountain climbers', sets: 3, targetReps: '20', type: 'reps' },
-        { name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    { day: 'Sunday', exercises: [] },
-  ],
-    5: [
-    {
-      day: 'Monday',
-      exercises: [
-        { name: 'Push-ups', sets: 3, targetReps: '20+', type: 'reps' },
-        { name: 'Dips', sets: 3, targetReps: '8-12', type: 'reps' },
-        { name: 'Resistance band shoulder press', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Tuesday',
-      exercises: [
-        { name: 'Glute bridges', sets: 3, targetReps: '15', type: 'reps' },
-        { name: 'Bodyweight squats', sets: 3, targetReps: '12', type: 'reps' },
-        { name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' },
-      ],
-    },
-    { day: 'Wednesday', exercises: [] },
-    {
-      day: 'Thursday',
-      exercises: [
-        { name: 'Pull-ups', sets: 3, targetReps: '5-7', type: 'reps' },
-        { name: 'Inverted rows', sets: 3, targetReps: '8-10', type: 'reps' },
-        { name: 'Resistance band bicep curls', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Friday',
-      exercises: [
-        { name: 'Handstand wall walks', sets: 3, targetReps: '5', type: 'reps' },
-        { name: 'Wall-supported handstand hold', sets: 3, targetReps: '45-60', type: 'duration' },
-        { name: 'Standard plank', sets: 3, targetReps: '45-60', type: 'duration' },
-        { name: 'Side planks', sets: 3, targetReps: '15-20', type: 'duration' },
-      ],
-    },
-    {
-      day: 'Saturday',
-      exercises: [
-        { name: 'Burpees', sets: 3, targetReps: '10', type: 'reps' },
-        { name: 'Mountain climbers', sets: 3, targetReps: '20', type: 'reps' },
-        { name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    { day: 'Sunday', exercises: [] },
-  ],
-  6: [
-    {
-      day: 'Monday',
-      exercises: [
-        { name: 'Push-ups', sets: 3, targetReps: '20+', type: 'reps' },
-        { name: 'Dips', sets: 3, targetReps: '8-12', type: 'reps' },
-        { name: 'Resistance band shoulder press', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Tuesday',
-      exercises: [
-        { name: 'Glute bridges', sets: 3, targetReps: '15', type: 'reps' },
-        { name: 'Bodyweight squats', sets: 3, targetReps: '12', type: 'reps' },
-        { name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' },
-      ],
-    },
-    { day: 'Wednesday', exercises: [] },
-    {
-      day: 'Thursday',
-      exercises: [
-        { name: 'Pull-ups', sets: 3, targetReps: '5-7', type: 'reps' },
-        { name: 'Inverted rows', sets: 3, targetReps: '8-10', type: 'reps' },
-        { name: 'Resistance band bicep curls', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    {
-      day: 'Friday',
-      exercises: [
-        { name: 'Handstand wall walks', sets: 3, targetReps: '5', type: 'reps' },
-        { name: 'Wall-supported handstand hold', sets: 3, targetReps: '45-60', type: 'duration' },
-        { name: 'Standard plank', sets: 3, targetReps: '45-60', type: 'duration' },
-        { name: 'Side planks', sets: 3, targetReps: '15-20', type: 'duration' },
-      ],
-    },
-    {
-      day: 'Saturday',
-      exercises: [
-        { name: 'Burpees', sets: 3, targetReps: '10', type: 'reps' },
-        { name: 'Mountain climbers', sets: 3, targetReps: '20', type: 'reps' },
-        { name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' },
-      ],
-    },
-    { day: 'Sunday', exercises: [] },
-  ],
-};
-
-const zAxisProgressionPlan = {
-  1: { 'Push-ups': '10-15', 'Pull-ups': '3-5', 'Standard plank': '20-30' },
-  2: { 'Push-ups': '10-15', 'Pull-ups': '3-5', 'Standard plank': '20-30' },
-  3: { 'Push-ups': '15-20', 'Pull-ups': '4-6', 'Standard plank': '30-45' },
-  4: { 'Push-ups': '15-20', 'Pull-ups': '4-6', 'Standard plank': '30-45' },
-  5: { 'Push-ups': '20+',    'Pull-ups': '5-7', 'Standard plank': '45-60' },
-  6: { 'Push-ups': '20+',    'Pull-ups': '5-7', 'Standard plank': '45-60' },
-};
-
-const tBoneTrainingSchedule: WeeklyPlan = {
-    1: [
-      {
-        day: 'Sunday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Dumbbell Lateral Raises', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '8', type: 'reps' },
-          { name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' },
-        ],
-      },
-      {
-        day: 'Monday',
-        exercises: [
-          { name: 'Dumbbell Squats', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps/dir', type: 'reps' },
-          { name: 'Glute Kickbacks', sets: 3, targetReps: '10/leg', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '20s', type: 'duration' },
-        ],
-      },
-      { day: 'Tuesday', exercises: [] },
-      {
-        day: 'Wednesday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Dumbbell Lateral Raises', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '8', type: 'reps' },
-          { name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' },
-        ],
-      },
-      {
-        day: 'Thursday',
-        exercises: [
-          { name: 'Dumbbell Squats', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps/dir', type: 'reps' },
-          { name: 'Glute Kickbacks', sets: 3, targetReps: '10/leg', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '20s', type: 'duration' },
-        ],
-      },
-      { day: 'Friday', exercises: [] },
-      {
-        day: 'Saturday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Dumbbell Squats', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '8', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '20s', type: 'duration' },
-        ],
-      },
-    ],
-    2: [
-      {
-        day: 'Sunday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Lateral Raises', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Lying Leg Raises', sets: 3, targetReps: '12', type: 'reps' },
-        ],
-      },
-      {
-        day: 'Monday',
-        exercises: [
-          { name: 'Dumbbell Squats', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Band Lateral Walks', sets: 3, targetReps: '12 steps/dir', type: 'reps' },
-          { name: 'Glute Kickbacks', sets: 3, targetReps: '12/leg', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '30s', type: 'duration' },
-        ],
-      },
-      { day: 'Tuesday', exercises: [] },
-      {
-        day: 'Wednesday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Lateral Raises', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Lying Leg Raises', sets: 3, targetReps: '12', type: 'reps' },
-        ],
-      },
-      {
-        day: 'Thursday',
-        exercises: [
-          { name: 'Dumbbell Squats', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Band Lateral Walks', sets: 3, targetReps: '12 steps/dir', type: 'reps' },
-          { name: 'Glute Kickbacks', sets: 3, targetReps: '12/leg', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '30s', type: 'duration' },
-        ],
-      },
-      { day: 'Friday', exercises: [] },
-      {
-        day: 'Saturday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Squats', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '10', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '30s', type: 'duration' },
-        ],
-      },
-    ],
-    3: [
-      {
-        day: 'Sunday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Lateral Raises', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Overhead Press', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Lying Leg Raises', sets: 3, targetReps: '15', type: 'reps' },
-        ],
-      },
-      {
-        day: 'Monday',
-        exercises: [
-          { name: 'Dumbbell Squats', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Glute Bridges', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Band Lateral Walks', sets: 3, targetReps: '12 steps/dir', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '40s', type: 'duration' },
-        ],
-      },
-      { day: 'Tuesday', exercises: [] },
-      {
-        day: 'Wednesday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Lateral Raises', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Overhead Press', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Lying Leg Raises', sets: 3, targetReps: '15', type: 'reps' },
-        ],
-      },
-      {
-        day: 'Thursday',
-        exercises: [
-          { name: 'Dumbbell Squats', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Glute Bridges', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Band Lateral Walks', sets: 3, targetReps: '12 steps/dir', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '40s', type: 'duration' },
-        ],
-      },
-      { day: 'Friday', exercises: [] },
-      {
-        day: 'Saturday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 4, targetReps: '12', type: 'reps' },
-          { name: 'Dumbbell Squats', sets: 4, targetReps: '12', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '12', type: 'reps' },
-          { name: 'Bicycle Crunches', sets: 3, targetReps: '12/side', type: 'reps' },
-        ],
-      },
-    ],
-    4: [
-      {
-        day: 'Sunday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Dumbbell Lateral Raises', sets: 3, targetReps: '15', type: 'reps' },
-          { name: 'Dumbbell Overhead Press', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '15', type: 'reps' },
-          { name: 'Russian Twists', sets: 3, targetReps: '20/side', type: 'reps' },
-        ],
-      },
-      {
-        day: 'Monday',
-        exercises: [
-          { name: 'Dumbbell Squats', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Dumbbell Glute Bridges', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Band Lateral Walks', sets: 3, targetReps: '15 steps/dir', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '50s', type: 'duration' },
-        ],
-      },
-      { day: 'Tuesday', exercises: [] },
-      {
-        day: 'Wednesday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Dumbbell Lateral Raises', sets: 3, targetReps: '15', type: 'reps' },
-          { name: 'Dumbbell Overhead Press', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '15', type: 'reps' },
-          { name: 'Russian Twists', sets: 3, targetReps: '20/side', type: 'reps' },
-        ],
-      },
-      {
-        day: 'Thursday',
-        exercises: [
-          { name: 'Dumbbell Squats', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Dumbbell Glute Bridges', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Band Lateral Walks', sets: 3, targetReps: '15 steps/dir', type: 'reps' },
-          { name: 'Plank', sets: 3, targetReps: '50s', type: 'duration' },
-        ],
-      },
-      { day: 'Friday', exercises: [] },
-      {
-        day: 'Saturday',
-        exercises: [
-          { name: 'Dumbbell Bicep Curls', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Dumbbell Squats', sets: 4, targetReps: '15', type: 'reps' },
-          { name: 'Push-Ups', sets: 3, targetReps: '15', type: 'reps' },
-          { name: 'Bicycle Crunches', sets: 3, targetReps: '15/side', type: 'reps' },
-        ],
-      },
-    ],
-};
-
-const tBoneProgressionPlan = {
-    1: {
-        'Dumbbell Bicep Curls': '3x10',
-        'Dumbbell Lateral Raises': '3x10',
-        'Push-Ups': '3x8',
-        'Lying Leg Raises': '3x10',
-        'Dumbbell Squats': '3x10',
-        'Band Lateral Walks': '3x10 steps/dir',
-        'Glute Kickbacks': '3x10/leg',
-        'Plank': '3x20s'
-    },
-    2: {
-        'Dumbbell Bicep Curls': '3x12',
-        'Dumbbell Lateral Raises': '3x12',
-        'Push-Ups': '3x10',
-        'Lying Leg Raises': '3x12',
-        'Dumbbell Squats': '3x12',
-        'Band Lateral Walks': '3x12 steps/dir',
-                'Glute Kickbacks': '3x12/leg',
-        'Plank': '3x30s'
-    },
-    3: {
-        'Dumbbell Bicep Curls': '3x12',
-        'DumbbellLateral Raises': '3x12',
-        'Dumbbell Overhead Press': '3x12',
-        'Push-Ups': '3x12',
-        'Lying Leg Raises': '3x15',
-        'Dumbbell Squats': '3x12',
-        'Dumbbell Glute Bridges': '3x12',
-        'Band Lateral Walks': '3x12 steps/dir',
-        'Plank': '3x40s'
-    },
-    4: {
-        'Dumbbell Bicep Curls': '4x15',
-        'Dumbbell Lateral Raises': '3x15',
-        'Dumbbell Overhead Press': '4x15',
-        'Push-Ups': '3x15',
-        'Russian Twists': '3x20/side',
-        'Dumbbell Squats': '4x15',
-        'Dumbbell Glute Bridges': '4x15',
-        'Band Lateral Walks': '3x15 steps/dir',
-        'Plank': '3x50s'
-    }
-};
-
-export const WorkoutProvider = ({ children }: WorkoutProviderProps) => {
+export function WorkoutProvider({ children }: { children: ReactNode }) {
   const [currentWeek, setCurrentWeek] = useState(1);
-  const [progressData, setProgressData] = useState<UserProgressEntry[]>([]);
+  const [progressData, setProgressData] = useState<WorkoutProgress[]>([]);
+  const [trainingPrograms, setTrainingPrograms] = useState<TrainingProgram[]>([]);
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [dailyWorkouts, setDailyWorkouts] = useState<{ [programId: string]: { [week: number]: DailyWorkout[] } }>({});
+  const [loadingWorkouts, setLoadingWorkouts] = useState(true);
   const { user } = useAuth();
 
-  // Fetch progress data from Supabase on initialization
+  // Helper function to get UUID from program name
+  const getProgramUUID = (programName: string): string => {
+    return PROGRAM_UUID_MAP[programName] || PROGRAM_UUID_MAP['Z Axis']; // Default to Z Axis if not found
+  };
+
+  // Load training programs and exercises
   useEffect(() => {
-    const fetchProgress = async () => {
+    const loadProgramData = async () => {
+      try {
+        // Load training programs
+        const { data: programsData, error: programsError } = await supabase
+          .from('training_programs')
+          .select('*');
+
+        if (programsError) throw programsError;
+        setTrainingPrograms(programsData);
+
+        // Load exercises
+        const { data: exercisesData, error: exercisesError } = await supabase
+          .from('exercises')
+          .select('*');
+
+        if (exercisesError) throw exercisesError;
+        setExercises(exercisesData);
+
+        const zAxisWorkouts = {
+          '550e8400-e29b-41d4-a716-446655440000': {
+            1: [
+              { day: 'Monday', exercises: [
+                { exerciseId: 'push-ups', name: 'Push-ups', sets: 3, targetReps: '10-15', type: 'reps' },
+                { exerciseId: 'dips', name: 'Dips', sets: 3, targetReps: '8-12', type: 'reps' },
+                { exerciseId: 'resistance-band-shoulder-press', name: 'Resistance band shoulder press', sets: 3, targetReps: '12', type: 'reps' }
+              ]},
+              { day: 'Tuesday', exercises: [
+                { exerciseId: 'glute-bridges', name: 'Glute bridges', sets: 3, targetReps: '15', type: 'reps' },
+                { exerciseId: 'bodyweight-squats', name: 'Bodyweight squats', sets: 3, targetReps: '12', type: 'reps' },
+                { exerciseId: 'resistance-band-leg-curls', name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' }
+              ]},
+              { day: 'Wednesday', exercises: [] },
+              { day: 'Thursday', exercises: [
+                { exerciseId: 'pull-ups', name: 'Pull-ups', sets: 3, targetReps: '3-5', type: 'reps' },
+                { exerciseId: 'inverted-rows', name: 'Inverted rows', sets: 3, targetReps: '8-10', type: 'reps' },
+                { exerciseId: 'resistance-band-bicep-curls', name: 'Resistance band bicep curls', sets: 3, targetReps: '12', type: 'reps' }
+              ]},
+              { day: 'Friday', exercises: [
+                { exerciseId: 'handstand-wall-walks', name: 'Handstand wall walks', sets: 3, targetReps: '5', type: 'reps' },
+                { exerciseId: 'wall-supported-handstand-hold', name: 'Wall-supported handstand hold', sets: 3, targetReps: '15-30', type: 'duration' },
+                { exerciseId: 'standard-plank', name: 'Standard plank', sets: 3, targetReps: '20-30', type: 'duration' },
+                { exerciseId: 'side-planks', name: 'Side planks', sets: 3, targetReps: '15-20', type: 'duration' }
+              ]},
+              { day: 'Saturday', exercises: [
+                { exerciseId: 'burpees', name: 'Burpees', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'mountain-climbers', name: 'Mountain climbers', sets: 3, targetReps: '20', type: 'reps' },
+                { exerciseId: 'resistance-band-rows', name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' }
+              ]},
+              { day: 'Sunday', exercises: [] }
+            ],
+            2: [
+                { day: 'Monday', exercises: [
+                  { exerciseId: 'push-ups', name: 'Push-ups', sets: 3, targetReps: '10-15', type: 'reps' },
+                  { exerciseId: 'dips', name: 'Dips', sets: 3, targetReps: '8-12', type: 'reps' },
+                  { exerciseId: 'resistance-band-shoulder-press', name: 'Resistance band shoulder press', sets: 3, targetReps: '12', type: 'reps' }
+                ]},
+                { day: 'Tuesday', exercises: [
+                  { exerciseId: 'glute-bridges', name: 'Glute bridges', sets: 3, targetReps: '15', type: 'reps' },
+                  { exerciseId: 'bodyweight-squats', name: 'Bodyweight squats', sets: 3, targetReps: '12', type: 'reps' },
+                  { exerciseId: 'resistance-band-leg-curls', name: 'Resistance band leg curls', sets: 3, targetReps: '15', type: 'reps' }
+                ]},
+                { day: 'Wednesday', exercises: [] },
+                { day: 'Thursday', exercises: [
+                  { exerciseId: 'pull-ups', name: 'Pull-ups', sets: 3, targetReps: '3-5', type: 'reps' },
+                  { exerciseId: 'inverted-rows', name: 'Inverted rows', sets: 3, targetReps: '8-10', type: 'reps' },
+                  { exerciseId: 'resistance-band-bicep-curls', name: 'Resistance band bicep curls', sets: 3, targetReps: '12', type: 'reps' }
+                ]},
+                { day: 'Friday', exercises: [
+                  { exerciseId: 'handstand-wall-walks', name: 'Handstand wall walks', sets: 3, targetReps: '5', type: 'reps' },
+                  { exerciseId: 'wall-supported-handstand-hold', name: 'Wall-supported handstand hold', sets: 3, targetReps: '15-30', type: 'duration' },
+                  { exerciseId: 'standard-plank', name: 'Standard plank', sets: 3, targetReps: '20-30', type: 'duration' },
+                  { exerciseId: 'side-planks', name: 'Side planks', sets: 3, targetReps: '15-20', type: 'duration' }
+                ]},
+                { day: 'Saturday', exercises: [
+                  { exerciseId: 'burpees', name: 'Burpees', sets: 3, targetReps: '10', type: 'reps' },
+                  { exerciseId: 'mountain-climbers', name: 'Mountain climbers', sets: 3, targetReps: '20', type: 'reps' },
+                  { exerciseId: 'resistance-band-rows', name: 'Resistance band rows', sets: 3, targetReps: '12', type: 'reps' }
+                ]},
+                { day: 'Sunday', exercises: [] }
+              ],
+            3: [
+                { day: 'Monday', exercises: [
+                  { exerciseId: 'push-ups', name: 'Push-ups', sets: 3, targetReps: '15-20', type: 'reps' },
+                  { exerciseId: 'dips', name: 'Dips', sets: 3, targetReps: '10-15', type: 'reps' },
+                  { exerciseId: 'resistance-band-shoulder-press', name: 'Resistance band shoulder press', sets: 3, targetReps: '15', type: 'reps' }
+                ]},
+                { day: 'Tuesday', exercises: [
+                  { exerciseId: 'glute-bridges', name: 'Glute bridges', sets: 3, targetReps: '20', type: 'reps' },
+                  { exerciseId: 'bodyweight-squats', name: 'Bodyweight squats', sets: 3, targetReps: '15', type: 'reps' },
+                  { exerciseId: 'resistance-band-leg-curls', name: 'Resistance band leg curls', sets: 3, targetReps: '20', type: 'reps' }
+                ]},
+                { day: 'Wednesday', exercises: [] },
+                { day: 'Thursday', exercises: [
+                  { exerciseId: 'pull-ups', name: 'Pull-ups', sets: 3, targetReps: '4-6', type: 'reps' },
+                  { exerciseId: 'inverted-rows', name: 'Inverted rows', sets: 3, targetReps: '10-12', type: 'reps' },
+                  { exerciseId: 'resistance-band-bicep-curls', name: 'Resistance band bicep curls', sets: 3, targetReps: '15', type: 'reps' }
+                ]},
+                { day: 'Friday', exercises: [
+                  { exerciseId: 'handstand-wall-walks', name: 'Handstand wall walks', sets: 3, targetReps: '6', type: 'reps' },
+                  { exerciseId: 'wall-supported-handstand-hold', name: 'Wall-supported handstand hold', sets: 3, targetReps: '20-35', type: 'duration' },
+                  { exerciseId: 'standard-plank', name: 'Standard plank', sets: 3, targetReps: '30-45', type: 'duration' },
+                  { exerciseId: 'side-planks', name: 'Side planks', sets: 3, targetReps: '20-30', type: 'duration' }
+                ]},
+                { day: 'Saturday', exercises: [
+                  { exerciseId: 'burpees', name: 'Burpees', sets: 3, targetReps: '12', type: 'reps' },
+                  { exerciseId: 'mountain-climbers', name: 'Mountain climbers', sets: 3, targetReps: '25', type: 'reps' },
+                  { exerciseId: 'resistance-band-rows', name: 'Resistance band rows', sets: 3, targetReps: '15', type: 'reps' }
+                ]},
+                { day: 'Sunday', exercises: [] }
+              ],
+            4:  [
+                { day: 'Monday', exercises: [
+                  { exerciseId: 'push-ups', name: 'Push-ups', sets: 3, targetReps: '15-20', type: 'reps' },
+                  { exerciseId: 'dips', name: 'Dips', sets: 3, targetReps: '10-15', type: 'reps' },
+                  { exerciseId: 'resistance-band-shoulder-press', name: 'Resistance band shoulder press', sets: 3, targetReps: '15', type: 'reps' }
+                ]},
+                { day: 'Tuesday', exercises: [
+                  { exerciseId: 'glute-bridges', name: 'Glute bridges', sets: 3, targetReps: '20', type: 'reps' },
+                  { exerciseId: 'bodyweight-squats', name: 'Bodyweight squats', sets: 3, targetReps: '15', type: 'reps' },
+                  { exerciseId: 'resistance-band-leg-curls', name: 'Resistance band leg curls', sets: 3, targetReps: '20', type: 'reps' }
+                ]},
+                { day: 'Wednesday', exercises: [] },
+                { day: 'Thursday', exercises: [
+                  { exerciseId: 'pull-ups', name: 'Pull-ups', sets: 3, targetReps: '4-6', type: 'reps' },
+                  { exerciseId: 'inverted-rows', name: 'Inverted rows', sets: 3, targetReps: '10-12', type: 'reps' },
+                  { exerciseId: 'resistance-band-bicep-curls', name: 'Resistance band bicep curls', sets: 3, targetReps: '15', type: 'reps' }
+                ]},
+                { day: 'Friday', exercises: [
+                  { exerciseId: 'handstand-wall-walks', name: 'Handstand wall walks', sets: 3, targetReps: '6', type: 'reps' },
+                  { exerciseId: 'wall-supported-handstand-hold', name: 'Wall-supported handstand hold', sets: 3, targetReps: '20-35', type: 'duration' },
+                  { exerciseId: 'standard-plank', name: 'Standard plank', sets: 3, targetReps: '30-45', type: 'duration' },
+                  { exerciseId: 'side-planks', name: 'Side planks', sets: 3, targetReps: '20-30', type: 'duration' }
+                ]},
+                { day: 'Saturday', exercises: [
+                  { exerciseId: 'burpees', name: 'Burpees', sets: 3, targetReps: '12', type: 'reps' },
+                  { exerciseId: 'mountain-climbers', name: 'Mountain climbers', sets: 3, targetReps: '25', type: 'reps' },
+                  { exerciseId: 'resistance-band-rows', name: 'Resistance band rows', sets: 3, targetReps: '15', type: 'reps' }
+                ]},
+                { day: 'Sunday', exercises: [] }
+              ],
+            5: [
+                { day: 'Monday', exercises: [
+                  { exerciseId: 'push-ups', name: 'Push-ups', sets: 3, targetReps: '20+', type: 'reps' },
+                  { exerciseId: 'dips', name: 'Dips', sets: 3, targetReps: '12-18', type: 'reps' },
+                  { exerciseId: 'resistance-band-shoulder-press', name: 'Resistance band shoulder press', sets: 3, targetReps: '18', type: 'reps' }
+                ]},
+                { day: 'Tuesday', exercises: [
+                  { exerciseId: 'glute-bridges', name: 'Glute bridges', sets: 3, targetReps: '25', type: 'reps' },
+                  { exerciseId: 'bodyweight-squats', name: 'Bodyweight squats', sets: 3, targetReps: '20', type: 'reps' },
+                  { exerciseId: 'resistance-band-leg-curls', name: 'Resistance band leg curls', sets: 3, targetReps: '25', type: 'reps' }
+                ]},
+                { day: 'Wednesday', exercises: [] },
+                { day: 'Thursday', exercises: [
+                  { exerciseId: 'pull-ups', name: 'Pull-ups', sets: 3, targetReps: '5-7', type: 'reps' },
+                  { exerciseId: 'inverted-rows', name: 'Inverted rows', sets: 3, targetReps: '12-15', type: 'reps' },
+                  { exerciseId: 'resistance-band-bicep-curls', name: 'Resistance band bicep curls', sets: 3, targetReps: '18', type: 'reps' }
+                ]},
+                { day: 'Friday', exercises: [
+                  { exerciseId: 'handstand-wall-walks', name: 'Handstand wall walks', sets: 3, targetReps: '7', type: 'reps' },
+                  { exerciseId: 'wall-supported-handstand-hold', name: 'Wall-supported handstand hold', sets: 3, targetReps: '30-45', type: 'duration' },
+                  { exerciseId: 'standard-plank', name: 'Standard plank', sets: 3, targetReps: '45-60', type: 'duration' },
+                  { exerciseId: 'side-planks', name: 'Side planks', sets: 3, targetReps: '30-40', type: 'duration' }
+                ]},
+                { day: 'Saturday', exercises: [
+                  { exerciseId: 'burpees', name: 'Burpees', sets: 3, targetReps: '15', type: 'reps' },
+                  { exerciseId: 'mountain-climbers', name: 'Mountain climbers', sets: 3, targetReps: '30', type: 'reps' },
+                  { exerciseId: 'resistance-band-rows', name: 'Resistance band rows', sets: 3, targetReps: '18', type: 'reps' }
+                ]},
+                { day: 'Sunday', exercises: [] }
+              ],
+            6: [
+                { day: 'Monday', exercises: [
+                  { exerciseId: 'push-ups', name: 'Push-ups', sets: 3, targetReps: '20+', type: 'reps' },
+                  { exerciseId: 'dips', name: 'Dips', sets: 3, targetReps: '12-18', type: 'reps' },
+                  { exerciseId: 'resistance-band-shoulder-press', name: 'Resistance band shoulder press', sets: 3, targetReps: '18', type: 'reps' }
+                ]},
+                { day: 'Tuesday', exercises: [
+                  { exerciseId: 'glute-bridges', name: 'Glute bridges', sets: 3, targetReps: '25', type: 'reps' },
+                  { exerciseId: 'bodyweight-squats', name: 'Bodyweight squats', sets: 3, targetReps: '20', type: 'reps' },
+                  { exerciseId: 'resistance-band-leg-curls', name: 'Resistance band leg curls', sets: 3, targetReps: '25', type: 'reps' }
+                ]},
+                { day: 'Wednesday', exercises: [] },
+                { day: 'Thursday', exercises: [
+                  { exerciseId: 'pull-ups', name: 'Pull-ups', sets: 3, targetReps: '5-7', type: 'reps' },
+                  { exerciseId: 'inverted-rows', name: 'Inverted rows', sets: 3, targetReps: '12-15', type: 'reps' },
+                  { exerciseId: 'resistance-band-bicep-curls', name: 'Resistance band bicep curls', sets: 3, targetReps: '18', type: 'reps' }
+                ]},
+                { day: 'Friday', exercises: [
+                  { exerciseId: 'handstand-wall-walks', name: 'Handstand wall walks', sets: 3, targetReps: '7', type: 'reps' },
+                  { exerciseId: 'wall-supported-handstand-hold', name: 'Wall-supported handstand hold', sets: 3, targetReps: '30-45', type: 'duration' },
+                  { exerciseId: 'standard-plank', name: 'Standard plank', sets: 3, targetReps: '45-60', type: 'duration' },
+                  { exerciseId: 'side-planks', name: 'Side planks', sets: 3, targetReps: '30-40', type: 'duration' }
+                ]},
+                { day: 'Saturday', exercises: [
+                  { exerciseId: 'burpees', name: 'Burpees', sets: 3, targetReps: '15', type: 'reps' },
+                  { exerciseId: 'mountain-climbers', name: 'Mountain climbers', sets: 3, targetReps: '30', type: 'reps' },
+                  { exerciseId: 'resistance-band-rows', name: 'Resistance band rows', sets: 3, targetReps: '18', type: 'reps' }
+                ]},
+                { day: 'Sunday', exercises: [] }
+              ]
+          }
+        };
+
+        const tBoneWorkouts = {
+          '550e8400-e29b-41d4-a716-446655440001': {
+            1: [
+              { day: 'Sunday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 3, targetReps: '8', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Monday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '20', type: 'duration' }
+              ]},
+              { day: 'Tuesday', exercises: [] },
+              { day: 'Wednesday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 3, targetReps: '8', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Thursday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '20', type: 'duration' }
+              ]},
+              { day: 'Friday', exercises: [] },
+              { day: 'Saturday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 3, targetReps: '8', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '20', type: 'duration' }
+              ]}
+            ],
+            2: [
+              { day: 'Sunday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Monday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '30', type: 'duration' }
+              ]},
+              { day: 'Tuesday', exercises: [] },
+              { day: 'Wednesday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Thursday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '30', type: 'duration' }
+              ]},
+              { day: 'Friday', exercises: [] },
+              { day: 'Saturday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '30', type: 'duration' }
+              ]}
+            ],
+            3: [
+              { day: 'Sunday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Monday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '40', type: 'duration' }
+              ]},
+              { day: 'Tuesday', exercises: [] },
+              { day: 'Wednesday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Thursday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '40', type: 'duration' }
+              ]},
+              { day: 'Friday', exercises: [] },
+              { day: 'Saturday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '40', type: 'duration' }
+              ]}
+            ],
+            4: [
+              { day: 'Sunday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '12', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Monday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '50', type: 'duration' }
+              ]},
+              { day: 'Tuesday', exercises: [] },
+              { day: 'Wednesday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '12', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Thursday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '50', type: 'duration' }
+              ]},
+              { day: 'Friday', exercises: [] },
+              { day: 'Saturday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '12', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '50', type: 'duration' }
+              ]}
+            ],
+            5: [
+              { day: 'Sunday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '15', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Monday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '60', type: 'duration' }
+              ]},
+              { day: 'Tuesday', exercises: [] },
+              { day: 'Wednesday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-lateral-raises', name: 'Dumbbell Lateral Raises (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '15', type: 'reps' },
+                { exerciseId: 'lying-leg-raises', name: 'Lying Leg Raises', sets: 3, targetReps: '10', type: 'reps' }
+              ]},
+              { day: 'Thursday', exercises: [
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'band-lateral-walks', name: 'Band Lateral Walks', sets: 3, targetReps: '10 steps', type: 'reps' },
+                { exerciseId: 'glute-kickbacks', name: 'Glute Kickbacks (band)', sets: 3, targetReps: '10', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '60', type: 'duration' }
+              ]},
+              { day: 'Friday', exercises: [] },
+              { day: 'Saturday', exercises: [
+                { exerciseId: 'dumbbell-bicep-curls', name: 'Dumbbell Bicep Curls (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'dumbbell-squats', name: 'Dumbbell Squats (3 kg)', sets: 4, targetReps: '10', type: 'reps' },
+                { exerciseId: 'push-ups', name: 'Push-Ups', sets: 4, targetReps: '15', type: 'reps' },
+                { exerciseId: 'plank', name: 'Plank', sets: 3, targetReps: '60', type: 'duration' }
+              ]}
+            ]
+          }
+        };
+
+        // Combine pre-defined workout data with data from Supabase (if any)
+        const combinedWorkouts = {
+          ...zAxisWorkouts,
+          ...tBoneWorkouts
+        };
+
+        setDailyWorkouts(combinedWorkouts);
+        setLoadingWorkouts(false);
+
+      } catch (error) {
+        console.error('Error loading program data:', error);
+        setLoadingWorkouts(false);
+      }
+    };
+
+    loadProgramData();
+  }, []);
+
+  // Load user progress
+  useEffect(() => {
+    const loadProgress = async () => {
       if (!user) return;
+
       try {
         const { data, error } = await supabase
-          .from('user_progress')
+          .from('workout_progress')
           .select('*')
           .eq('user_id', user.id);
 
         if (error) throw error;
-        console.log("Fetched data:", data); // Debug log
-
-        // Transform Supabase data into UserProgressEntry format
-        const transformedData = data.reduce((acc: UserProgressEntry[], item) => {
-          let weekEntry = acc.find(e => e.week === item.week && e.day === item.day);
-          if (!weekEntry) {
-            weekEntry = { week: item.week, day: item.day, reps: {} };
-            acc.push(weekEntry);
-          }
-          if (item.exercise_name === 'notes') {
-            weekEntry.notes = item.notes;
-          } else {
-            weekEntry.reps[item.exercise_name] = item.reps;
-          }
-          return acc;
-        }, []);
-
-        console.log("Transformed data:", transformedData); // Debug log
-        setProgressData(transformedData);
+        
+        if (data) {
+          // Transform dates from strings to Date objects
+          const transformedData = data.map(entry => ({
+            ...entry,
+            date: new Date(entry.date)
+          }));
+          setProgressData(transformedData);
+        }
       } catch (error) {
-        console.error('Error fetching progress:', error);
+        console.error('Error loading progress:', error);
       }
     };
-    fetchProgress();
+
+    loadProgress();
   }, [user]);
 
-  const updateProgressEntry = async (week: number, day: string, exerciseName: string, value: number[] | string) => {
-    if (!user) {
-      console.error("No user logged in.");
-      return;
+  const updateProgress = async (progress: Partial<WorkoutProgress>) => {
+    if (!user) return;
+
+    // Convert selectedPlan name to UUID if needed
+    let programId = (progress as any).program_id;
+    if (!programId && user.selectedPlan) {
+      programId = getProgramUUID(user.selectedPlan);
     }
-    console.log(`updateProgressEntry called with week: ${week}, day: ${day}, exerciseName: ${exerciseName}, value:`, value); // Debug log
-
-    // Update local progressData
-    const updatedProgress = [...progressData];
-    let weekDayEntry = updatedProgress.find(entry => entry.week === week && entry.day === day);
-
-    if (!weekDayEntry) {
-      weekDayEntry = { week, day, reps: {} };
-      updatedProgress.push(weekDayEntry);
-    }
-
-    if (typeof value === 'string') {
-      weekDayEntry.notes = value;
-    } else {
-      weekDayEntry.reps[exerciseName] = value;
-    }
-
-    setProgressData(updatedProgress);
-    console.log("Updated progress data:", updatedProgress); // Debug log
-
-    // Prepare data for Supabase
-    const upsertData = {
-      user_id: user.id,
-      week,
-      day,
-      exercise_name: exerciseName,
-      reps: typeof value !== 'string' ? value : null,
-      notes: typeof value === 'string' ? value : null,
-    };
-
-    console.log("Data to upsert:", upsertData); // Debug log
 
     try {
       const { error } = await supabase
-        .from('user_progress')
-        .upsert([upsertData], { onConflict: 'user_id, week, day, exercise_name' });
+        .from('workout_progress')
+        .upsert({
+          user_id: user.id,
+          ...progress,
+          program_id: programId
+        }, {
+          onConflict: 'user_id, date'
+        });
 
-      if (error) {
-        console.error('Error updating progress:', error);
+      if (error) throw error;
+
+      // Update local state
+      setProgressData(prev => {
+        const newData = [...prev];
+        const existingIndex = newData.findIndex(
+          p => p.date.toISOString() === (progress.date as Date).toISOString()
+        );
+
+        if (existingIndex >= 0) {
+          newData[existingIndex] = {
+            ...newData[existingIndex],
+            ...progress
+          } as WorkoutProgress;
       } else {
-        console.log('Progress updated successfully for', exerciseName);
-      }
-    } catch (err) {
-      console.error('Unexpected error updating progress:', err);
+          newData.push(progress as WorkoutProgress);
+        }
+
+        return newData;
+      });
+    } catch (error) {
+      console.error('Error updating progress:', error);
+      throw error;
     }
   };
 
-  const getPlannedWorkout = (planName: string) => {
-    const selectedSchedule = planName === "Z Axis" ? zAxisTrainingSchedule : tBoneTrainingSchedule;
-    return selectedSchedule[currentWeek]?.find(
-      (dailyWorkout) =>
-        dailyWorkout.day ===
-        new Date().toLocaleDateString('en-US', { weekday: 'long' }),
-    );
-  };
+  const getPlannedWorkout = (programId: string): DailyWorkout | undefined => {
+    // Convert program name to UUID if needed    
+    // Handle both direct UUIDs and program names
+    let programUUID = programId;
+    
+    // If it's not in UUID format, convert from name to UUID
+    if (!programId.includes('-')) {
+      programUUID = PROGRAM_UUID_MAP[programId] || programId;
+    }
+        
+    if (!dailyWorkouts[programUUID] || !dailyWorkouts[programUUID][currentWeek]) {
+      return undefined;
+    }
 
-  const contextValue: WorkoutContextType = {
-    currentWeek,
-    setCurrentWeek,
-    progressData,
-    updateProgressEntry,
-    getPlannedWorkout,
-    trainingSchedules: { "Z Axis": zAxisTrainingSchedule, "T Bone": tBoneTrainingSchedule },
-    progressionPlans: { "Z Axis": zAxisProgressionPlan, "T Bone": tBoneProgressionPlan },
-    setProgressData,
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+        
+    const workout = dailyWorkouts[programUUID][currentWeek].find(
+      workout => workout.day === today
+    );
+    
+    return workout;
   };
 
   return (
-    <WorkoutContext.Provider value={contextValue}>
+    <WorkoutContext.Provider value={{
+    currentWeek,
+    setCurrentWeek,
+    progressData,
+      updateProgress,
+    getPlannedWorkout,
+      trainingPrograms,
+      exercises,
+      dailyWorkouts,
+      loadingWorkouts,
+      getProgramUUID
+    }}>
       {children}
     </WorkoutContext.Provider>
   );
-};
+}
 
-export const useWorkout = () => {
+export function useWorkout() {
   const context = useContext(WorkoutContext);
   if (!context) {
     throw new Error('useWorkout must be used within a WorkoutProvider');
   }
   return context;
-};
+}
